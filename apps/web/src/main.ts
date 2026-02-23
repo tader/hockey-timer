@@ -350,6 +350,63 @@ function firstString(dict: Record<string, unknown>, keys: string[]): string | un
   return recursiveLookup(dict, new Set(keys.map((key) => key.toLowerCase())));
 }
 
+function parseTeamsFromDisplay(display: string | undefined): { homeTeam?: string; awayTeam?: string } {
+  if (!display) return {};
+  const normalized = display.trim();
+  if (!normalized) return {};
+
+  for (const separator of [" vs ", " VS ", " - ", " tegen "]) {
+    const parts = normalized.split(separator).map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 2) {
+      return { homeTeam: parts[0], awayTeam: parts[1] };
+    }
+  }
+  return {};
+}
+
+function extractTeamBySide(dict: Record<string, unknown>, side: "home" | "away"): string | undefined {
+  const sideTokens =
+    side === "home"
+      ? ["home", "thuis", "host", "h"]
+      : ["away", "uit", "guest", "a"];
+
+  const walk = (value: unknown): string | undefined => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = walk(item);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    const object = value as Record<string, unknown>;
+    const sideHint = firstString(object, ["side", "type", "thuisUit", "thuisuit", "rol", "role"]);
+    if (sideHint && sideTokens.some((token) => sideHint.toLowerCase().includes(token))) {
+      const name = firstString(object, ["name", "naam", "teamnaam", "teamName", "omschrijving", "title"]);
+      if (name) return name;
+    }
+
+    for (const [key, nested] of Object.entries(object)) {
+      const lowered = key.toLowerCase();
+      if (sideTokens.some((token) => lowered.includes(token))) {
+        const direct = scalarString(nested);
+        if (direct) return direct;
+      }
+    }
+
+    for (const nested of Object.values(object)) {
+      const found = walk(nested);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  return walk(dict);
+}
+
 async function fetchKNHBOptions(url: string, preferredNameKeys: string[]): Promise<KNHBOption[]> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -424,28 +481,47 @@ async function loadKNHBMatches(teamId: string): Promise<void> {
     for (const item of jsonObjects(payload)) {
       const id = firstString(item, ["id", "matchId", "wedstrijdcode", "wedstrijdnummer", "code"]);
       if (!id) continue;
+      const displayTitle = firstString(item, ["title", "naam", "name", "omschrijving", "wedstrijd"]);
+      const parsedDisplay = parseTeamsFromDisplay(displayTitle);
+
       const homeTeam =
         firstString(item, [
           "homeTeamName",
           "homeTeam",
           "teamhome",
+          "teamHome",
           "thuisteam",
+          "thuisTeam",
+          "thuisteamnaam",
           "home_team_name",
           "team_thuis",
           "thuis_team",
           "home_name",
-        ]) ?? "Home";
+          "home",
+          "thuis",
+        ]) ??
+        extractTeamBySide(item, "home") ??
+        parsedDisplay.homeTeam ??
+        "Home";
       const awayTeam =
         firstString(item, [
           "awayTeamName",
           "awayTeam",
           "teamaway",
+          "teamAway",
           "uitteam",
+          "uitTeam",
+          "uitteamnaam",
           "away_team_name",
           "team_uit",
           "uit_team",
           "away_name",
-        ]) ?? "Away";
+          "away",
+          "uit",
+        ]) ??
+        extractTeamBySide(item, "away") ??
+        parsedDisplay.awayTeam ??
+        "Away";
       const dateRaw = firstString(item, [
         "date",
         "datum",
@@ -670,8 +746,15 @@ function wireHandlers(): void {
 
   const clubQueryInput = appRoot.querySelector<HTMLInputElement>("#clubQuery");
   clubQueryInput?.addEventListener("input", () => {
+    const selectionStart = clubQueryInput.selectionStart ?? clubQueryInput.value.length;
+    const selectionEnd = clubQueryInput.selectionEnd ?? clubQueryInput.value.length;
     uiState.clubQuery = clubQueryInput.value;
     render();
+    const replacement = appRoot.querySelector<HTMLInputElement>("#clubQuery");
+    if (replacement) {
+      replacement.focus();
+      replacement.setSelectionRange(selectionStart, selectionEnd);
+    }
   });
 
   const loadClubsButton = appRoot.querySelector<HTMLButtonElement>("#loadClubs");

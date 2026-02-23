@@ -309,20 +309,32 @@ struct KNHBApiClient {
                 return nil
             }
 
+            let titleCandidate = firstString(
+                in: dict,
+                keys: ["title", "naam", "name", "omschrijving", "wedstrijd"]
+            )
+            let parsedTitle = parseTeams(fromDisplay: titleCandidate)
+
             let home = firstString(
                 in: dict,
                 keys: [
-                    "homeTeamName", "homeTeam", "teamhome", "thuisteam",
-                    "home_team_name", "team_thuis", "thuis_team", "home_name"
+                    "homeTeamName", "homeTeam", "teamhome", "teamHome", "thuisteam", "thuisTeam",
+                    "thuisteamnaam", "home_team_name", "team_thuis", "thuis_team", "home_name",
+                    "home", "thuis"
                 ]
-            ) ?? "Home"
+            ) ?? extractTeamBySide(in: dict, side: "home")
+              ?? parsedTitle.home
+              ?? "Home"
             let away = firstString(
                 in: dict,
                 keys: [
-                    "awayTeamName", "awayTeam", "teamaway", "uitteam",
-                    "away_team_name", "team_uit", "uit_team", "away_name"
+                    "awayTeamName", "awayTeam", "teamaway", "teamAway", "uitteam", "uitTeam",
+                    "uitteamnaam", "away_team_name", "team_uit", "uit_team", "away_name",
+                    "away", "uit"
                 ]
-            ) ?? "Away"
+            ) ?? extractTeamBySide(in: dict, side: "away")
+              ?? parsedTitle.away
+              ?? "Away"
             let date = firstString(
                 in: dict,
                 keys: [
@@ -334,6 +346,68 @@ struct KNHBApiClient {
 
             return KNHBUpcomingMatch(id: id, title: "\(home) vs \(away)", subtitle: date)
         }
+    }
+
+    private func parseTeams(fromDisplay display: String?) -> (home: String?, away: String?) {
+        guard let display, !display.isEmpty else { return (nil, nil) }
+
+        let separators = [" vs ", " VS ", " - ", " tegen "]
+        for separator in separators {
+            let parts = display.components(separatedBy: separator)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if parts.count == 2 {
+                return (parts[0], parts[1])
+            }
+        }
+        return (nil, nil)
+    }
+
+    private func extractTeamBySide(in dict: [String: Any], side: String) -> String? {
+        let sideTokens: [String] = side == "home"
+            ? ["home", "thuis", "host", "h"]
+            : ["away", "uit", "guest", "a"]
+
+        func walk(_ value: Any) -> String? {
+            if let array = value as? [Any] {
+                for item in array {
+                    if let found = walk(item) {
+                        return found
+                    }
+                }
+                return nil
+            }
+
+            guard let object = value as? [String: Any] else {
+                return nil
+            }
+
+            if let sideHint = firstString(in: object, keys: ["side", "type", "thuisUit", "thuisuit", "rol", "role"]) {
+                let loweredSideHint = sideHint.lowercased()
+                if sideTokens.contains(where: loweredSideHint.contains) {
+                    if let name = firstString(in: object, keys: ["name", "naam", "teamnaam", "teamName", "omschrijving", "title"]) {
+                        return name
+                    }
+                }
+            }
+
+            for (key, nested) in object {
+                let loweredKey = key.lowercased()
+                if sideTokens.contains(where: loweredKey.contains), let direct = scalarString(from: nested) {
+                    return direct
+                }
+            }
+
+            for nested in object.values {
+                if let found = walk(nested) {
+                    return found
+                }
+            }
+
+            return nil
+        }
+
+        return walk(dict)
     }
 
     private func fetchOptions(urlString: String, preferredNameKeys: [String]) async throws -> [KNHBOption] {
