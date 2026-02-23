@@ -62,14 +62,15 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - Imported metadata must include `homeTeam`, `awayTeam`, and `knhbMatchId`.
 - KNHB datetime handling:
   - Treat KNHB source date/time as UTC.
-  - Display KNHB dates/times in `Europe/Amsterdam`.
+  - Always convert KNHB display to `Europe/Amsterdam`.
+  - Show KNHB match date only in UI (no time), even when source time is known.
   - If only date is known and source time is `00:00:00 UTC`, treat time as unknown:
-    convert to `Europe/Amsterdam` local date, then display local time as `00:00:00`.
+    convert to `Europe/Amsterdam` local date and display that local date.
 
 ## Match List & Metadata UX
 - Users can create custom matches.
 - Users can edit match metadata after creation/import.
-- Match list should show match date/time.
+- Match list should show match date (local, Europe/Amsterdam).
 - Match list should sort newest-first (based on match date/time, fallback to creation time).
 - Match list should support filtering by:
   - home team

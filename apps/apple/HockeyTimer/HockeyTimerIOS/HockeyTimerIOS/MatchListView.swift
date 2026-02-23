@@ -328,30 +328,11 @@ enum MatchDateFormatters {
         formatter.locale = Locale(identifier: "nl_NL")
         formatter.timeZone = amsterdamTimeZone
         formatter.dateStyle = .medium
-        formatter.timeStyle = .medium
+        formatter.timeStyle = .none
         return formatter
     }()
 
     static func display(_ date: Date) -> String {
-        let timeKnown = !isUtcMidnight(date)
-        guard !timeKnown else {
-            return list.string(from: date)
-        }
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = amsterdamTimeZone
-        var components = calendar.dateComponents([.year, .month, .day], from: date)
-        components.hour = 0
-        components.minute = 0
-        components.second = 0
-        let localMidnight = calendar.date(from: components) ?? date
-        return list.string(from: localMidnight)
-    }
-
-    private static func isUtcMidnight(_ date: Date) -> Bool {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
-        let components = calendar.dateComponents([.hour, .minute, .second], from: date)
-        return components.hour == 0 && components.minute == 0 && components.second == 0
+        list.string(from: date)
     }
 }

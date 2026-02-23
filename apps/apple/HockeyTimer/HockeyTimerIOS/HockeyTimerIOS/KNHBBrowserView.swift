@@ -21,6 +21,7 @@ struct KNHBUpcomingMatch: Identifiable, Hashable {
     let id: String
     let title: String
     let subtitle: String
+    let dateRaw: String?
 }
 
 @MainActor
@@ -147,7 +148,7 @@ struct KNHBBrowserView: View {
                             let item = MatchListItem(
                                 id: "knhb-\(match.id)",
                                 source: "knhb",
-                                matchDateTime: parseKNHBDate(match.subtitle),
+                                matchDateTime: parseKNHBDate(match.dateRaw ?? ""),
                                 homeTeam: splitTeams(from: match.title).home,
                                 awayTeam: splitTeams(from: match.title).away,
                                 clubName: selectedClubName,
@@ -218,10 +219,24 @@ struct KNHBBrowserView: View {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             if parts.count == 2 {
+                if looksLikeDateToken(parts[1]) {
+                    continue
+                }
                 return (parts[0], parts[1])
             }
         }
         return (title, "Away")
+    }
+
+    private func looksLikeDateToken(_ value: String) -> Bool {
+        let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return false }
+        if token.range(of: #"^\d{4}-\d{2}-\d{2}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{2}-\d{2}-\d{4}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{4}/\d{2}/\d{2}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{2}:\d{2}(?::\d{2})?$"#, options: .regularExpression) != nil { return true }
+        if token.contains("T") && token.contains("Z") { return true }
+        return false
     }
 
     private func parseKNHBDate(_ value: String) -> Date? {
@@ -366,25 +381,84 @@ struct KNHBApiClient {
                     "starttime", "starttijd", "aanvang", "aanvangstijd",
                     "plannedStart", "beginDateTime", "speeldatum", "datetime"
                 ]
-            ) ?? "Date unknown"
-
-            return KNHBUpcomingMatch(id: id, title: "\(home) – \(away)", subtitle: date)
+            )
+            let dateLabel = formatAmsterdamDateLabel(from: date)
+            return KNHBUpcomingMatch(id: id, title: "\(home) – \(away)", subtitle: dateLabel, dateRaw: date)
         }
     }
 
     private func parseTeams(fromDisplay display: String?) -> (home: String?, away: String?) {
         guard let display, !display.isEmpty else { return (nil, nil) }
 
-        let separators = [" vs ", " VS ", " - ", " tegen "]
+        let separators = [" – ", " vs ", " VS ", " - ", " tegen "]
         for separator in separators {
             let parts = display.components(separatedBy: separator)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             if parts.count == 2 {
+                if looksLikeDateToken(parts[1]) {
+                    continue
+                }
                 return (parts[0], parts[1])
             }
         }
         return (nil, nil)
+    }
+
+    private func looksLikeDateToken(_ value: String) -> Bool {
+        let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return false }
+        if token.range(of: #"^\d{4}-\d{2}-\d{2}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{2}-\d{2}-\d{4}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{4}/\d{2}/\d{2}(?:[ T].*)?$"#, options: .regularExpression) != nil { return true }
+        if token.range(of: #"^\d{2}:\d{2}(?::\d{2})?$"#, options: .regularExpression) != nil { return true }
+        if token.contains("T") && token.contains("Z") { return true }
+        return false
+    }
+
+    private func formatAmsterdamDateLabel(from raw: String?) -> String {
+        guard let raw, let date = parsePossibleDate(raw) else {
+            return "Date unknown"
+        }
+        return MatchDateFormatters.display(date)
+    }
+
+    private func parsePossibleDate(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let epochMs = Double(trimmed), epochMs > 10_000_000_000 {
+            return Date(timeIntervalSince1970: epochMs / 1000)
+        }
+        if let epoch = Double(trimmed), epoch > 1_000_000_000 {
+            return Date(timeIntervalSince1970: epoch)
+        }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+
+        let fallback = DateFormatter()
+        fallback.locale = Locale(identifier: "nl_NL")
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX",
+            "dd-MM-yyyy HH:mm",
+            "dd-MM-yyyy HH:mm:ss"
+        ]
+        for format in formats {
+            fallback.dateFormat = format
+            if let date = fallback.date(from: trimmed) {
+                return date
+            }
+        }
+
+        return nil
     }
 
     private func extractTeamBySide(in dict: [String: Any], side: String) -> String? {

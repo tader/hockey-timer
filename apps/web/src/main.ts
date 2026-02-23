@@ -116,7 +116,10 @@ function matchTitle(match: MatchMetadata): string {
 function matchSubtitle(match: MatchMetadata): string {
   const parts: string[] = [];
   if (match.matchDateTime) {
-    parts.push(formatAmsterdamDateTime(match.matchDateTime));
+    const formatted = formatAmsterdamDate(match.matchDateTime);
+    if (formatted) {
+      parts.push(formatted);
+    }
   }
   if (match.clubName) {
     parts.push(match.clubName);
@@ -288,40 +291,22 @@ function parsePossibleDate(value?: string): string | undefined {
   return undefined;
 }
 
-function formatAmsterdamDateTime(value: string): string {
+function formatAmsterdamDate(value: string): string | undefined {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return value;
+  if (Number.isNaN(parsed.valueOf())) return undefined;
 
-  const timeKnown = !isUtcMidnight(parsed);
   const parts = new Intl.DateTimeFormat("nl-NL", {
     timeZone: "Europe/Amsterdam",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
   }).formatToParts(parsed);
 
   const lookup = new Map(parts.map((part) => [part.type, part.value]));
   const day = lookup.get("day") ?? "00";
   const month = lookup.get("month") ?? "00";
   const year = lookup.get("year") ?? "0000";
-  const hour = timeKnown ? lookup.get("hour") ?? "00" : "00";
-  const minute = timeKnown ? lookup.get("minute") ?? "00" : "00";
-  const second = timeKnown ? lookup.get("second") ?? "00" : "00";
-
-  return `${day}-${month}-${year} ${hour}:${minute}:${second}`;
-}
-
-function isUtcMidnight(date: Date): boolean {
-  return (
-    date.getUTCHours() === 0 &&
-    date.getUTCMinutes() === 0 &&
-    date.getUTCSeconds() === 0 &&
-    date.getUTCMilliseconds() === 0
-  );
+  return `${day}-${month}-${year}`;
 }
 
 function jsonObjects(value: unknown): Record<string, unknown>[] {
@@ -395,10 +380,24 @@ function parseTeamsFromDisplay(display: string | undefined): { homeTeam?: string
   for (const separator of [" – ", " vs ", " VS ", " - ", " tegen "]) {
     const parts = normalized.split(separator).map((part) => part.trim()).filter(Boolean);
     if (parts.length === 2) {
+      if (looksLikeDateToken(parts[1])) {
+        continue;
+      }
       return { homeTeam: parts[0], awayTeam: parts[1] };
     }
   }
   return {};
+}
+
+function looksLikeDateToken(value: string): boolean {
+  const token = value.trim();
+  if (!token) return false;
+  if (/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(token)) return true;
+  if (/^\d{2}-\d{2}-\d{4}(?:[ T].*)?$/.test(token)) return true;
+  if (/^\d{4}\/\d{2}\/\d{2}(?:[ T].*)?$/.test(token)) return true;
+  if (/^\d{2}:\d{2}(?::\d{2})?$/.test(token)) return true;
+  if (token.includes("T") && token.includes("Z")) return true;
+  return false;
 }
 
 function extractTeamBySide(dict: Record<string, unknown>, side: "home" | "away"): string | undefined {
@@ -656,7 +655,7 @@ function render(): void {
             ${uiState.foundMatches
               .map((match) => {
                 const parsed = parsePossibleDate(match.dateRaw);
-                const label = parsed ? formatAmsterdamDateTime(parsed) : match.dateRaw ?? "Date unknown";
+                const label = parsed ? (formatAmsterdamDate(parsed) ?? "Date unknown") : "Date unknown";
                 return `
                   <div class="found-match">
                     <div><strong>${escapeHtml(match.homeTeam)} – ${escapeHtml(match.awayTeam)}</strong></div>

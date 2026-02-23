@@ -29,7 +29,7 @@
   - club abbreviation preferred
   - team label `${name} (${type})`
   - match title `${home_team.name} – ${away_team.name}`
-  - UTC source datetime displayed in `Europe/Amsterdam`
+  - UTC source datetime displayed as local date in `Europe/Amsterdam`
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.

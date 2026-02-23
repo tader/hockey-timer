@@ -33,11 +33,12 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 
 ## Date/Time Rules (Agreed)
 - KNHB datetimes are treated as UTC source values.
-- Display KNHB match date/time in `Europe/Amsterdam` time zone for convenience.
+- Always convert KNHB datetime display to `Europe/Amsterdam` local time.
+- UI shows KNHB match date only (no time) even when source time is known.
 - If KNHB provides date-only values represented as `00:00:00 UTC`:
   - treat these records as `time unknown`,
   - convert the UTC source instant to `Europe/Amsterdam` local date,
-  - then set local display time to `00:00:00` while keeping that local date.
+  - display only that local date.
 
 ## Caching Strategy (Draft)
 - Cache club/team listings with TTL (longer).
