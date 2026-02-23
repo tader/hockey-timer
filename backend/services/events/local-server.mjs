@@ -2,6 +2,7 @@ import http from "node:http";
 import { URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8787);
+const KNHB_BASE = "https://publicaties.hockeyweerelt.nl/mc";
 
 const eventsByMatch = new Map();
 const seenEventIds = new Set();
@@ -144,6 +145,31 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+async function proxyKnhbJson(res, path) {
+  const target = `${KNHB_BASE}${path}`;
+  try {
+    const response = await fetch(target, {
+      headers: { accept: "application/json" },
+    });
+
+    const text = await response.text();
+    const contentType = response.headers.get("content-type") || "application/json";
+    res.writeHead(response.status, {
+      "content-type": contentType,
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-headers": "content-type",
+    });
+    res.end(text);
+  } catch (error) {
+    sendJson(res, 502, {
+      error: "knhb proxy failed",
+      details: String(error),
+      target,
+    });
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (!req.url || !req.method) {
     sendJson(res, 400, { error: "bad request" });
@@ -164,6 +190,9 @@ const server = http.createServer(async (req, res) => {
   const upsertMatch = url.pathname.match(/^\/matches\/([^/]+)\/events:batchUpsert$/);
   const eventsMatch = url.pathname.match(/^\/matches\/([^/]+)\/events$/);
   const projectionMatch = url.pathname.match(/^\/matches\/([^/]+)\/projection$/);
+  const knhbClubsMatch = url.pathname.match(/^\/knhb\/clubs$/);
+  const knhbTeamsMatch = url.pathname.match(/^\/knhb\/clubs\/([^/]+)\/teams$/);
+  const knhbUpcomingMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/upcoming$/);
 
   if (req.method === "POST" && upsertMatch) {
     const matchId = decodeURIComponent(upsertMatch[1]);
@@ -205,6 +234,23 @@ const server = http.createServer(async (req, res) => {
     const matchId = decodeURIComponent(projectionMatch[1]);
     const projection = replayMatch(eventsByMatch.get(matchId) || [], matchId);
     sendJson(res, 200, projection);
+    return;
+  }
+
+  if (req.method === "GET" && knhbClubsMatch) {
+    await proxyKnhbJson(res, "/clubs");
+    return;
+  }
+
+  if (req.method === "GET" && knhbTeamsMatch) {
+    const clubId = encodeURIComponent(decodeURIComponent(knhbTeamsMatch[1]));
+    await proxyKnhbJson(res, `/clubs/${clubId}/teams`);
+    return;
+  }
+
+  if (req.method === "GET" && knhbUpcomingMatch) {
+    const teamId = encodeURIComponent(decodeURIComponent(knhbUpcomingMatch[1]));
+    await proxyKnhbJson(res, `/teams/${teamId}/matches/upcoming`);
     return;
   }
 

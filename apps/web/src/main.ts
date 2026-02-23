@@ -1,5 +1,5 @@
 const API_BASE = (globalThis as { __API_BASE__?: string }).__API_BASE__ ?? "http://localhost:8787";
-const KNHB_BASE = "https://publicaties.hockeyweerelt.nl/mc";
+const KNHB_BASE = `${API_BASE}/knhb`;
 const matchesKey = "hockey_timer_web_matches";
 const selectedMatchIdKey = "hockey_timer_web_selected_match";
 const deviceIdKey = "hockey_timer_web_device_id";
