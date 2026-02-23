@@ -12,13 +12,13 @@ struct MatchListItem: Identifiable, Codable, Hashable {
     let knhbMatchId: String?
 
     var title: String {
-        "\(homeTeam) vs \(awayTeam)"
+        "\(homeTeam) – \(awayTeam)"
     }
 
     var subtitle: String {
         var parts: [String] = []
         if let matchDateTime {
-            parts.append(MatchDateFormatters.list.string(from: matchDateTime))
+            parts.append(MatchDateFormatters.display(matchDateTime))
         }
         if let clubName, !clubName.isEmpty {
             parts.append(clubName)
@@ -321,10 +321,27 @@ struct MatchMetadataEditorView: View {
 }
 
 enum MatchDateFormatters {
+    static let amsterdamTimeZone = TimeZone(identifier: "Europe/Amsterdam") ?? .current
+
     static let list: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.timeZone = amsterdamTimeZone
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter
     }()
+
+    static func display(_ date: Date) -> String {
+        let adjusted = isUtcMidnight(date)
+            ? date.addingTimeInterval(24 * 60 * 60)
+            : date
+        return list.string(from: adjusted)
+    }
+
+    private static func isUtcMidnight(_ date: Date) -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let components = calendar.dateComponents([.hour, .minute, .second], from: date)
+        return components.hour == 0 && components.minute == 0 && components.second == 0
+    }
 }

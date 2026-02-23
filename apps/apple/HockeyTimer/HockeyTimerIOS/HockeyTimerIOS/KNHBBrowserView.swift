@@ -6,8 +6,12 @@ struct KNHBOption: Identifiable, Hashable {
     let id: String
     let name: String
     let subtitle: String?
+    let abbreviation: String?
 
     var displayName: String {
+        if let abbreviation, !abbreviation.isEmpty, (subtitle == nil || subtitle?.isEmpty == true) {
+            return abbreviation
+        }
         guard let subtitle, !subtitle.isEmpty else { return name }
         return "\(name) (\(subtitle))"
     }
@@ -198,7 +202,8 @@ struct KNHBBrowserView: View {
 
     private var selectedClubName: String? {
         guard let selectedClubId = model.selectedClubId else { return nil }
-        return model.clubs.first(where: { $0.id == selectedClubId })?.name
+        let club = model.clubs.first(where: { $0.id == selectedClubId })
+        return club?.abbreviation ?? club?.name
     }
 
     private var selectedTeamName: String? {
@@ -207,9 +212,14 @@ struct KNHBBrowserView: View {
     }
 
     private func splitTeams(from title: String) -> (home: String, away: String) {
-        let parts = title.components(separatedBy: " vs ")
-        if parts.count == 2 {
-            return (parts[0], parts[1])
+        let separators = [" – ", " vs ", " VS ", " - ", " tegen "]
+        for separator in separators {
+            let parts = title.components(separatedBy: separator)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if parts.count == 2 {
+                return (parts[0], parts[1])
+            }
         }
         return (title, "Away")
     }
@@ -252,6 +262,26 @@ struct KNHBBrowserView: View {
                 return date
             }
         }
+
+        if let dateOnly = parseDateOnly(trimmed) {
+            return dateOnly
+        }
+        return nil
+    }
+
+    private func parseDateOnly(_ value: String) -> Date? {
+        let formats = ["yyyy-MM-dd", "dd-MM-yyyy"]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) {
+                return date
+            }
+        }
+
         return nil
     }
 }
@@ -280,14 +310,8 @@ struct KNHBApiClient {
                 return nil
             }
 
-            let competition = stringValue(in: dict, keys: ["competitie", "competition", "competitionName", "discipline", "soort"])
-            let season = stringValue(in: dict, keys: ["seizoen", "season"])
-            let subtitle = [competition, season].compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }.joined(separator: " • ")
-
-            return KNHBOption(id: id, name: name, subtitle: subtitle.isEmpty ? nil : subtitle)
+            let type = firstString(in: dict, keys: ["type", "soort", "discipline", "veldZaal", "veld_zaal", "competitionType"])
+            return KNHBOption(id: id, name: name, subtitle: type, abbreviation: nil)
         }
     }
 
@@ -344,7 +368,7 @@ struct KNHBApiClient {
                 ]
             ) ?? "Date unknown"
 
-            return KNHBUpcomingMatch(id: id, title: "\(home) vs \(away)", subtitle: date)
+            return KNHBUpcomingMatch(id: id, title: "\(home) – \(away)", subtitle: date)
         }
     }
 
@@ -426,7 +450,8 @@ struct KNHBApiClient {
             guard let name = stringValue(in: dict, keys: preferredNameKeys) else {
                 return nil
             }
-            return KNHBOption(id: id, name: name, subtitle: nil)
+            let abbreviation = firstString(in: dict, keys: ["abbreviation", "afkorting", "abbr", "kortenaam"])
+            return KNHBOption(id: id, name: name, subtitle: nil, abbreviation: abbreviation)
         }
     }
 

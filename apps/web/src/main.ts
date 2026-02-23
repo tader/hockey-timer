@@ -35,6 +35,7 @@ type KNHBOption = {
   id: string;
   name: string;
   subtitle?: string;
+  abbreviation?: string;
 };
 
 type KNHBMatch = {
@@ -109,13 +110,13 @@ function escapeHtml(value: string): string {
 }
 
 function matchTitle(match: MatchMetadata): string {
-  return `${match.homeTeam} vs ${match.awayTeam}`;
+  return `${match.homeTeam} – ${match.awayTeam}`;
 }
 
 function matchSubtitle(match: MatchMetadata): string {
   const parts: string[] = [];
   if (match.matchDateTime) {
-    parts.push(new Date(match.matchDateTime).toLocaleString());
+    parts.push(formatAmsterdamDateTime(match.matchDateTime));
   }
   if (match.clubName) {
     parts.push(match.clubName);
@@ -287,6 +288,33 @@ function parsePossibleDate(value?: string): string | undefined {
   return undefined;
 }
 
+function formatAmsterdamDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return value;
+
+  // KNHB date-only values are represented as 00:00:00 UTC; display as next local day convenience.
+  const adjusted = isUtcMidnight(parsed) ? new Date(parsed.getTime() + 24 * 60 * 60 * 1000) : parsed;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(adjusted);
+}
+
+function isUtcMidnight(date: Date): boolean {
+  return (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 function jsonObjects(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
@@ -355,7 +383,7 @@ function parseTeamsFromDisplay(display: string | undefined): { homeTeam?: string
   const normalized = display.trim();
   if (!normalized) return {};
 
-  for (const separator of [" vs ", " VS ", " - ", " tegen "]) {
+  for (const separator of [" – ", " vs ", " VS ", " - ", " tegen "]) {
     const parts = normalized.split(separator).map((part) => part.trim()).filter(Boolean);
     if (parts.length === 2) {
       return { homeTeam: parts[0], awayTeam: parts[1] };
@@ -413,14 +441,15 @@ async function fetchKNHBOptions(url: string, preferredNameKeys: string[]): Promi
     throw new Error(`KNHB fetch failed: ${response.status}`);
   }
   const payload = (await response.json()) as unknown;
-  return jsonObjects(payload)
-    .map((item) => {
-      const id = firstString(item, ["id", "clubId", "teamId", "code"]);
-      const name = firstString(item, preferredNameKeys);
-      if (!id || !name) return null;
-      return { id, name } satisfies KNHBOption;
-    })
-    .filter((item): item is KNHBOption => item !== null);
+  const options: KNHBOption[] = [];
+  for (const item of jsonObjects(payload)) {
+    const id = firstString(item, ["id", "clubId", "teamId", "code"]);
+    const name = firstString(item, preferredNameKeys);
+    if (!id || !name) continue;
+    const abbreviation = firstString(item, ["abbreviation", "afkorting", "abbr", "kortenaam"]);
+    options.push({ id, name, abbreviation });
+  }
+  return options;
 }
 
 async function loadKNHBClubs(): Promise<void> {
@@ -451,9 +480,8 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
       const id = firstString(item, ["id", "teamId", "code"]);
       const name = firstString(item, ["name", "naam", "teamnaam"]);
       if (!id || !name) continue;
-      const competition = firstString(item, ["competitie", "competition", "competitionName", "discipline", "soort"]);
-      const season = firstString(item, ["seizoen", "season"]);
-      const subtitle = [competition, season].filter((entry): entry is string => !!entry).join(" • ");
+      const type = firstString(item, ["type", "soort", "discipline", "veldZaal", "veld_zaal", "competitionType"]);
+      const subtitle = type;
       teams.push({ id, name, subtitle: subtitle || undefined });
     }
     uiState.teams = teams;
@@ -598,7 +626,8 @@ function render(): void {
               .map((club) => {
                 const selected = club.id === uiState.selectedClubId ? "selected" : "";
                 const subtitle = club.subtitle ? ` (${escapeHtml(club.subtitle)})` : "";
-                return `<button class="js-select-club ${selected}" data-club-id="${escapeHtml(club.id)}">${escapeHtml(club.name)}${subtitle}</button>`;
+                const clubLabel = club.abbreviation ?? club.name;
+                return `<button class="js-select-club ${selected}" data-club-id="${escapeHtml(club.id)}">${escapeHtml(clubLabel)}${subtitle}</button>`;
               })
               .join("")}
           </div>
@@ -618,10 +647,10 @@ function render(): void {
             ${uiState.foundMatches
               .map((match) => {
                 const parsed = parsePossibleDate(match.dateRaw);
-                const label = parsed ? new Date(parsed).toLocaleString() : match.dateRaw ?? "Date unknown";
+                const label = parsed ? formatAmsterdamDateTime(parsed) : match.dateRaw ?? "Date unknown";
                 return `
                   <div class="found-match">
-                    <div><strong>${escapeHtml(match.homeTeam)} vs ${escapeHtml(match.awayTeam)}</strong></div>
+                    <div><strong>${escapeHtml(match.homeTeam)} – ${escapeHtml(match.awayTeam)}</strong></div>
                     <div class="muted">${escapeHtml(label)}</div>
                     <button class="js-import-match" data-knhb-match-id="${escapeHtml(match.id)}">Import</button>
                   </div>
@@ -808,7 +837,7 @@ function wireHandlers(): void {
         homeTeam: selected.homeTeam,
         awayTeam: selected.awayTeam,
         matchDateTime: parsePossibleDate(selected.dateRaw),
-        clubName: selectedClub?.name,
+        clubName: selectedClub?.abbreviation ?? selectedClub?.name,
         teamName: selectedTeam ? `${selectedTeam.name}${selectedTeam.subtitle ? ` (${selectedTeam.subtitle})` : ""}` : undefined,
         knhbMatchId: selected.id,
       };

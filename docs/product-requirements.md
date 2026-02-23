@@ -55,6 +55,15 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - optional `knhbMatchId`
 - KNHB team selection must disambiguate teams that share the same name across
   competitions (e.g., `zaal` vs `veld`) by showing competition context.
+- KNHB data formatting requirements:
+  - Club display uses KNHB `abbreviation` when available.
+  - Team display in selection uses `${name} (${type})`.
+  - Match naming uses `${home_team.name} – ${away_team.name}` (home first).
+  - Imported metadata must include `homeTeam`, `awayTeam`, and `knhbMatchId`.
+- KNHB datetime handling:
+  - Treat KNHB source date/time as UTC.
+  - Display KNHB dates/times in `Europe/Amsterdam`.
+  - If only date is known and source time is `00:00:00 UTC`, still convert and display in `Europe/Amsterdam` local date/time.
 
 ## Match List & Metadata UX
 - Users can create custom matches.
