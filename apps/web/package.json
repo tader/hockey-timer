@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc && cp index.html dist/index.html && cp src/styles.css dist/styles.css",
-    "serve": "python3 -m http.server 4173 -d dist"
+    "dev": "vite --host 0.0.0.0 --port 4173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "serve": "npm run preview"
+  },
+  "devDependencies": {
+    "vite": "^7.2.0"
   }
 }

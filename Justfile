@@ -28,93 +28,10 @@ build-ios-device:
 build-watch-device:
   xcodebuild -project "{{project}}" -scheme "{{watch_scheme}}" -configuration Debug -destination "generic/platform=watchOS" -derivedDataPath "{{derived_watch}}-$(date +%s)" build
 
-# Rebuilds apps/web on source changes and restarts the local static server.
+# Starts Vite dev server with hot reload for the web app.
 dev-web:
-  #!/usr/bin/env zsh
-  set -euo pipefail
+  npm run dev:web
 
-  watch_hash() {
-    {
-      find apps/web/src -type f 2>/dev/null
-      echo apps/web/index.html
-    } | sort | xargs shasum | shasum | awk '{print $1}'
-  }
-
-  cleanup() {
-    if [[ -n "${serve_pid:-}" ]]; then
-      kill "${serve_pid}" 2>/dev/null || true
-      wait "${serve_pid}" 2>/dev/null || true
-    fi
-  }
-
-  restart_server() {
-    echo "[dev-web] Building web app..."
-    npm run build:web
-    if [[ -n "${serve_pid:-}" ]]; then
-      kill "${serve_pid}" 2>/dev/null || true
-      wait "${serve_pid}" 2>/dev/null || true
-    fi
-    echo "[dev-web] Starting web server on :4173"
-    npm run -w @hockey-timer/web serve &
-    serve_pid=$!
-  }
-
-  trap cleanup EXIT INT TERM
-  last_hash=""
-  restart_server
-  last_hash="$(watch_hash)"
-  echo "[dev-web] Watching for changes in apps/web/src and apps/web/index.html ..."
-  while true; do
-    current_hash="$(watch_hash)"
-    if [[ "${current_hash}" != "${last_hash}" ]]; then
-      last_hash="${current_hash}"
-      restart_server
-    fi
-    sleep 1
-  done
-
-# Restarts local events service when backend/shared source changes.
+# Starts local events service in watch mode.
 dev-events:
-  #!/usr/bin/env zsh
-  set -euo pipefail
-
-  watch_hash() {
-    {
-      find backend/services/events -type f 2>/dev/null
-      find shared/event-schema -type f 2>/dev/null
-      find shared/replay-engine -type f 2>/dev/null
-      echo package.json
-    } | sort | xargs shasum | shasum | awk '{print $1}'
-  }
-
-  cleanup() {
-    if [[ -n "${service_pid:-}" ]]; then
-      kill "${service_pid}" 2>/dev/null || true
-      wait "${service_pid}" 2>/dev/null || true
-    fi
-  }
-
-  restart_service() {
-    if [[ -n "${service_pid:-}" ]]; then
-      kill "${service_pid}" 2>/dev/null || true
-      wait "${service_pid}" 2>/dev/null || true
-    fi
-    echo "[dev-events] Starting events service on :8787"
-    npm run start:events &
-    service_pid=$!
-  }
-
-  trap cleanup EXIT INT TERM
-  last_hash=""
-  restart_service
-  last_hash="$(watch_hash)"
-  echo "[dev-events] Watching backend/services/events + shared/event-schema + shared/replay-engine ..."
-  while true; do
-    current_hash="$(watch_hash)"
-    if [[ "${current_hash}" != "${last_hash}" ]]; then
-      last_hash="${current_hash}"
-      echo "[dev-events] Change detected; restarting service..."
-      restart_service
-    fi
-    sleep 1
-  done
+  npm run dev:events

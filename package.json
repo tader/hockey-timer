@@ -12,6 +12,8 @@
     "check": "npm run --workspaces typecheck",
     "typecheck": "npm run --workspaces typecheck",
     "build:web": "npm run -w @hockey-timer/web build",
-    "start:events": "node backend/services/events/local-server.mjs"
+    "dev:web": "npm run -w @hockey-timer/web dev",
+    "start:events": "node backend/services/events/local-server.mjs",
+    "dev:events": "node --watch-path=backend/services/events --watch-path=shared/event-schema --watch-path=shared/replay-engine backend/services/events/local-server.mjs"
   }
 }
