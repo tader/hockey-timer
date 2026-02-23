@@ -72,6 +72,7 @@ final class KNHBBrowserViewModel: ObservableObject {
 struct KNHBBrowserView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = KNHBBrowserViewModel()
+    @State private var clubQuery = ""
 
     let onSelect: (MatchListItem) -> Void
 
@@ -81,12 +82,30 @@ struct KNHBBrowserView: View {
                 if model.clubs.isEmpty {
                     Button("Load Clubs") { model.loadClubs() }
                 } else {
-                    Picker("Select Club", selection: $model.selectedClubId) {
-                        Text("Choose club").tag(String?.none)
-                        ForEach(model.clubs) { club in
-                            Text(club.name).tag(String?.some(club.id))
+                    TextField("Search club", text: $clubQuery)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    if clubQuery.isEmpty {
+                        Text("Type to filter clubs")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredClubs.prefix(25)) { club in
+                            Button {
+                                model.selectedClubId = club.id
+                            } label: {
+                                HStack {
+                                    Text(club.name)
+                                    Spacer()
+                                    if model.selectedClubId == club.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                            }
                         }
                     }
+
                     Button("Load Teams") { model.loadTeams() }
                         .disabled(model.selectedClubId == nil)
                 }
@@ -159,6 +178,12 @@ struct KNHBBrowserView: View {
                 model.loadClubs()
             }
         }
+    }
+
+    private var filteredClubs: [KNHBOption] {
+        let normalized = clubQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return [] }
+        return model.clubs.filter { $0.name.localizedCaseInsensitiveContains(normalized) }
     }
 }
 
