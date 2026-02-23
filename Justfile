@@ -72,3 +72,49 @@ dev-web:
     fi
     sleep 1
   done
+
+# Restarts local events service when backend/shared source changes.
+dev-events:
+  #!/usr/bin/env zsh
+  set -euo pipefail
+
+  watch_hash() {
+    {
+      find backend/services/events -type f 2>/dev/null
+      find shared/event-schema -type f 2>/dev/null
+      find shared/replay-engine -type f 2>/dev/null
+      echo package.json
+    } | sort | xargs shasum | shasum | awk '{print $1}'
+  }
+
+  cleanup() {
+    if [[ -n "${service_pid:-}" ]]; then
+      kill "${service_pid}" 2>/dev/null || true
+      wait "${service_pid}" 2>/dev/null || true
+    fi
+  }
+
+  restart_service() {
+    if [[ -n "${service_pid:-}" ]]; then
+      kill "${service_pid}" 2>/dev/null || true
+      wait "${service_pid}" 2>/dev/null || true
+    fi
+    echo "[dev-events] Starting events service on :8787"
+    npm run start:events &
+    service_pid=$!
+  }
+
+  trap cleanup EXIT INT TERM
+  last_hash=""
+  restart_service
+  last_hash="$(watch_hash)"
+  echo "[dev-events] Watching backend/services/events + shared/event-schema + shared/replay-engine ..."
+  while true; do
+    current_hash="$(watch_hash)"
+    if [[ "${current_hash}" != "${last_hash}" ]]; then
+      last_hash="${current_hash}"
+      echo "[dev-events] Change detected; restarting service..."
+      restart_service
+    fi
+    sleep 1
+  done
