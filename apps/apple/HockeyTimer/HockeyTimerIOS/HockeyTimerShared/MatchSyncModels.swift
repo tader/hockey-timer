@@ -15,7 +15,7 @@ struct MatchFormatDTO: Decodable {
     let periodDurationSeconds: [Int]
 }
 
-struct MatchEventPayload: Encodable {
+struct MatchEventPayload: Codable {
     let team: String?
     let delta: Int?
     let reason: String?
@@ -23,7 +23,7 @@ struct MatchEventPayload: Encodable {
     static let empty = MatchEventPayload(team: nil, delta: nil, reason: nil)
 }
 
-struct MatchEventDTO: Encodable {
+struct MatchEventDTO: Codable {
     let eventId: String
     let matchId: String
     let eventType: String
@@ -35,6 +35,6 @@ struct MatchEventDTO: Encodable {
     let version: Int
 }
 
-struct MatchBatchUpsertBody: Encodable {
+struct MatchBatchUpsertBody: Codable {
     let events: [MatchEventDTO]
 }

@@ -10,6 +10,7 @@ class MatchSyncViewModel: ObservableObject {
     @Published var currentPeriodPlayedSeconds: Int = 0
     @Published var periodCount: Int = 4
     @Published var periodDurationSeconds: Int = 17 * 60 + 30
+    @Published var pendingEventCount: Int = 0
     @Published var lastError: String?
 
     private let matchId: String
@@ -18,6 +19,7 @@ class MatchSyncViewModel: ObservableObject {
     private let sequenceKey: String
     private let apiBaseKey: String
     private let defaultApiBase: String
+    private let queueStore: PendingEventStore
 
     init(
         matchId: String,
@@ -33,6 +35,13 @@ class MatchSyncViewModel: ObservableObject {
         self.sequenceKey = sequenceKey
         self.apiBaseKey = apiBaseKey
         self.defaultApiBase = defaultApiBase
+        self.queueStore = PendingEventStore(
+            key: "hockeytimer.pending-events.\(originPlatform).\(matchId)"
+        )
+
+        Task {
+            await updatePendingEventCount()
+        }
     }
 
     var stateLabel: String {
@@ -65,6 +74,7 @@ class MatchSyncViewModel: ObservableObject {
     func refreshProjection() {
         Task {
             do {
+                try? await flushQueuedEvents()
                 let projection = try await fetchProjection()
                 await MainActor.run {
                     homeScore = projection.homeScore
@@ -111,23 +121,6 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func push(eventType: String, payload: MatchEventPayload) {
-        Task {
-            do {
-                try await pushEvent(eventType: eventType, payload: payload)
-                refreshProjection()
-            } catch {
-                await MainActor.run {
-                    lastError = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func pushEvent(eventType: String, payload: MatchEventPayload) async throws {
-        guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/events:batchUpsert") else {
-            return
-        }
-
         let event = MatchEventDTO(
             eventId: UUID().uuidString.lowercased(),
             matchId: matchId,
@@ -140,7 +133,38 @@ class MatchSyncViewModel: ObservableObject {
             version: 1
         )
 
-        let body = MatchBatchUpsertBody(events: [event])
+        Task {
+            await queueStore.append(event)
+            await updatePendingEventCount()
+
+            do {
+                try await flushQueuedEvents()
+                refreshProjection()
+            } catch {
+                await MainActor.run {
+                    lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func flushQueuedEvents() async throws {
+        let events = await queueStore.load()
+        guard !events.isEmpty else {
+            return
+        }
+
+        try await pushEvents(events)
+        await queueStore.clear()
+        await updatePendingEventCount()
+    }
+
+    private func pushEvents(_ events: [MatchEventDTO]) async throws {
+        guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/events:batchUpsert") else {
+            return
+        }
+
+        let body = MatchBatchUpsertBody(events: events)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "content-type")
@@ -184,5 +208,52 @@ class MatchSyncViewModel: ObservableObject {
 
     private func format(seconds: Int) -> String {
         String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func updatePendingEventCount() async {
+        let count = await queueStore.count()
+        await MainActor.run {
+            pendingEventCount = count
+        }
+    }
+}
+
+actor PendingEventStore {
+    private let key: String
+    private let defaults = UserDefaults.standard
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(key: String) {
+        self.key = key
+    }
+
+    func count() -> Int {
+        load().count
+    }
+
+    func load() -> [MatchEventDTO] {
+        guard let data = defaults.data(forKey: key) else {
+            return []
+        }
+
+        return (try? decoder.decode([MatchEventDTO].self, from: data)) ?? []
+    }
+
+    func append(_ event: MatchEventDTO) {
+        var events = load()
+        events.append(event)
+        save(events)
+    }
+
+    func clear() {
+        defaults.removeObject(forKey: key)
+    }
+
+    private func save(_ events: [MatchEventDTO]) {
+        guard let data = try? encoder.encode(events) else {
+            return
+        }
+        defaults.set(data, forKey: key)
     }
 }
