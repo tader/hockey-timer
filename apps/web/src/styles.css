@@ -137,6 +137,21 @@ pre {
   color: #b00020;
 }
 
+.events-list {
+  margin-top: 0.5rem;
+  max-height: 16rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.event-item {
+  border: 1px solid #d0dce4;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: #f7fafc;
+}
+
 @media (max-width: 900px) {
   body {
     padding: 1rem;

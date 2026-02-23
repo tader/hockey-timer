@@ -20,6 +20,16 @@ type Projection = {
   lastEventAt?: string;
 };
 
+type MatchEvent = {
+  eventId: string;
+  eventType: string;
+  occurredAt: string;
+  payload?: Record<string, unknown>;
+  originDeviceId?: string;
+  originPlatform?: string;
+  sequence?: number;
+};
+
 type MatchMetadata = {
   id: string;
   source: "web-custom" | "knhb" | "local";
@@ -68,6 +78,7 @@ type UIState = {
   clubQuery: string;
   favoriteTeams: FavoriteTeam[];
   activeFavoriteKey?: string;
+  events: MatchEvent[];
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -90,6 +101,7 @@ const uiState: UIState = {
   clubQuery: "",
   favoriteTeams: loadFavoriteTeams(),
   activeFavoriteKey: undefined,
+  events: [],
 };
 
 if (uiState.matches.length === 0) {
@@ -300,6 +312,16 @@ async function fetchProjection(matchId: string): Promise<Projection> {
   return response.json() as Promise<Projection>;
 }
 
+async function fetchEvents(matchId: string): Promise<MatchEvent[]> {
+  const response = await fetch(`${API_BASE}/matches/${matchId}/events`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`events fetch failed: ${response.status} ${text}`);
+  }
+  const payload = (await response.json()) as { events?: MatchEvent[] };
+  return payload.events ?? [];
+}
+
 function formatClock(seconds: number): string {
   const safe = Math.max(0, seconds);
   const mm = String(Math.floor(safe / 60)).padStart(2, "0");
@@ -324,11 +346,15 @@ async function refreshProjection(): Promise<void> {
   if (!selectedMatch) return;
   const targetMatchId = selectedMatch.id;
   try {
-    const projection = await fetchProjection(targetMatchId);
+    const [projection, events] = await Promise.all([
+      fetchProjection(targetMatchId),
+      fetchEvents(targetMatchId),
+    ]);
     if (uiState.selectedMatchId !== targetMatchId) {
       return;
     }
     uiState.projection = projection;
+    uiState.events = events;
     uiState.output = `Last update: ${new Date().toLocaleTimeString()} (event: ${projection.lastEventAt ?? "none"})`;
     syncLivePanel();
   } catch (error) {
@@ -388,6 +414,52 @@ function formatAmsterdamDate(value: string): string | undefined {
   const month = lookup.get("month") ?? "00";
   const year = lookup.get("year") ?? "0000";
   return `${day}-${month}-${year}`;
+}
+
+function formatAmsterdamDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return value;
+  const parts = new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const lookup = new Map(parts.map((part) => [part.type, part.value]));
+  return `${lookup.get("day") ?? "00"}-${lookup.get("month") ?? "00"}-${lookup.get("year") ?? "0000"} ${lookup.get("hour") ?? "00"}:${lookup.get("minute") ?? "00"}:${lookup.get("second") ?? "00"}`;
+}
+
+function summarizePayload(payload?: Record<string, unknown>): string {
+  if (!payload) return "";
+  const entries = Object.entries(payload);
+  if (entries.length === 0) return "";
+  const compact = entries
+    .slice(0, 4)
+    .map(([key, value]) => `${key}=${typeof value === "string" ? value : JSON.stringify(value)}`)
+    .join(" ");
+  return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+}
+
+function renderEventsList(): string {
+  if (uiState.events.length === 0) {
+    return `<div class="muted">No events yet</div>`;
+  }
+  return uiState.events
+    .map((event) => {
+      const payload = summarizePayload(event.payload);
+      return `
+        <div class="event-item">
+          <div><strong>${escapeHtml(event.eventType)}</strong></div>
+          <div class="muted">${escapeHtml(formatAmsterdamDateTime(event.occurredAt))}</div>
+          ${payload ? `<div class="muted">${escapeHtml(payload)}</div>` : ""}
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function jsonObjects(value: unknown): Record<string, unknown>[] {
@@ -824,6 +896,8 @@ function render(): void {
               <div class="row">
                 <button id="poll">Poll Now</button>
               </div>
+              <h3>Events</h3>
+              <div id="liveEvents" class="events-list">${renderEventsList()}</div>
             `
             : "<p>No match selected.</p>"
         }
@@ -864,6 +938,11 @@ function syncLivePanel(): void {
   if (output) {
     output.textContent = uiState.loading ? "Loading..." : uiState.output;
   }
+
+  const events = appRoot.querySelector<HTMLElement>("#liveEvents");
+  if (events) {
+    events.innerHTML = renderEventsList();
+  }
 }
 
 function wireHandlers(): void {
@@ -874,6 +953,7 @@ function wireHandlers(): void {
       uiState.selectedMatchId = id;
       localStorage.setItem(selectedMatchIdKey, id);
       uiState.projection = null;
+      uiState.events = [];
       uiState.output = "Match selected.";
       render();
       void refreshProjection();
