@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Purpose
-This repository is in documentation-first mode. Do not start implementation work until the sync and product design plan is approved.
+Build and iterate the hockey timer ecosystem with Apple apps as the current active delivery focus.
 
 ## Product Scope
 Build a native multi-platform Field Hockey Timer ecosystem:
@@ -10,6 +10,7 @@ Build a native multi-platform Field Hockey Timer ecosystem:
 - Web app (serverless cloud backend)
 - Android phone app
 - Android watch app
+Note: Android implementation is currently paused until Apple apps are satisfactory.
 
 ## Core Product Principles
 - Event-sourced match model: all match state is derived from ordered events.
@@ -31,9 +32,7 @@ Build a native multi-platform Field Hockey Timer ecosystem:
 - Keep delivery work tracked in `docs/tasks.md`.
 
 ## Current Phase
-Planning and architecture only:
-1. Finalize event schema and replay model.
-2. Finalize sync/conflict strategy for low-connectivity watches.
-3. Finalize backend/serverless architecture.
-4. Finalize platform app boundaries and milestones.
-
+Apple + web MVP implementation and hardening:
+1. Stabilize Apple watch/iOS match flows and sync behavior.
+2. Complete serverless-ready backend APIs and integration tests.
+3. Keep Android work paused until Apple acceptance.

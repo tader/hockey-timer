@@ -15,17 +15,19 @@
 - Apple apps consolidated into one Xcode project:
   - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerIOS.xcodeproj`
 - Shared Apple code extracted for iOS + watch:
-  - `apps/apple/HockeyTimer/HockeyTimerShared/MatchSyncModels.swift`
-  - `apps/apple/HockeyTimer/HockeyTimerShared/MatchSyncViewModel.swift`
+  - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerShared/MatchSyncModels.swift`
+  - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerShared/MatchSyncViewModel.swift`
 - iOS + watch simulator builds verified with `just` recipes.
+- Apple API base URL is runtime configurable in iOS + watch settings.
+- Apple shared sync now persists a durable offline event queue and retries flush on reconnect paths.
+- iOS app includes KNHB club/team/upcoming-match browse + import flow for match prefill.
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.
+- Android delivery is intentionally paused while Apple stack is finalized.
 
 ## Next Priorities
-1. Replace hardcoded Apple API base URL with configurable runtime setting.
-2. Implement durable local event queue on Apple clients (offline-first behavior).
-3. Add KNHB integration in app flows (selection/prefill).
-4. Start Android app scaffolding against same event/projection APIs.
-5. Add integration tests for replay, dedupe, and event ordering edge cases.
-
+1. Add integration tests for replay, dedupe, and event ordering edge cases.
+2. Implement cloud/serverless persistence for events/projections beyond local demo server.
+3. Extend Apple gossip sync behavior and diagnostics for poor connectivity.
+4. Prepare Android backlog but keep implementation paused until Apple acceptance.

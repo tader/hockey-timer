@@ -17,7 +17,7 @@ Documentation-first repository for a multi-platform Field Hockey Timer ecosystem
 - Integrate with KNHB Match Center data.
 
 ## Current Status
-MVP scaffold started (initial code + architecture-aligned stubs).
+MVP execution in progress with Apple + web focus; Android is temporarily paused.
 
 ## Documentation Map
 - `docs/product-requirements.md`:
@@ -60,7 +60,11 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
 - Unified Apple Xcode project (iOS + watch):
   - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerIOS.xcodeproj`
 - Shared Apple match sync code (used by iOS + watch):
-  - `apps/apple/HockeyTimer/HockeyTimerShared/MatchSyncViewModel.swift`
+  - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerShared/MatchSyncViewModel.swift`
+- Apple runtime improvements implemented:
+  - Configurable API base setting (iOS + watch).
+  - Durable offline event queue with retry on reconnect.
+  - iOS KNHB import flow (club -> team -> upcoming match).
 
 ## Validation
 - Typecheck passes for all TypeScript workspaces:

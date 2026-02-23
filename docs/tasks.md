@@ -7,6 +7,9 @@
 4. Apple code consolidated to single project under `apps/apple/HockeyTimer/`.
 5. Shared Apple sync/model code extracted to `HockeyTimerShared`.
 6. Simulator builds validated with `just build-all-sim`.
+7. Apple API base URL made runtime-configurable (iOS + watch).
+8. Durable Apple offline event queue implemented.
+9. iOS KNHB browse/import flow added for match prefill.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
@@ -43,6 +46,7 @@
 10. End-to-end test in poor connectivity scenarios.
 
 ## Phase 3: Android
+Status: On hold until Apple apps are satisfactory.
 1. Build Android phone app (Compose).
 2. Build Wear OS app and local sync path.
 3. Validate cross-platform convergence with shared test fixtures.
