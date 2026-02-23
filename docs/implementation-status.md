@@ -25,6 +25,7 @@
 - iOS match list now shows metadata, supports newest-first sorting, and filter inputs (home/away/club/team).
 - Imported KNHB matches now persist `knhbMatchId` in local metadata.
 - KNHB team picker now includes competition context in labels to disambiguate duplicate team names.
+- KNHB team favorites implemented in web + iOS for quick re-selection and direct match loading.
 - KNHB display/data rules documented:
   - club abbreviation preferred
   - team label `${name} (${type})`

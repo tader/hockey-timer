@@ -55,6 +55,9 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - optional `knhbMatchId`
 - KNHB team selection must disambiguate teams that share the same name across
   competitions (e.g., `zaal` vs `veld`) by showing competition context.
+- Users can favorite/unfavorite KNHB teams for quick access.
+- Favorite teams should be persisted locally and provide a fast path to load
+  upcoming matches without re-browsing clubs.
 - KNHB data formatting requirements:
   - Club display uses KNHB `abbreviation` when available.
   - Team display in selection uses `${name} (${type})`.

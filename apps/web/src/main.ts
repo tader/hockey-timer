@@ -4,6 +4,7 @@ const matchesKey = "hockey_timer_web_matches";
 const selectedMatchIdKey = "hockey_timer_web_selected_match";
 const deviceIdKey = "hockey_timer_web_device_id";
 const sequenceKey = "hockey_timer_web_sequence";
+const favoriteTeamsKey = "hockey_timer_web_favorite_teams";
 
 type Projection = {
   homeScore: number;
@@ -45,6 +46,12 @@ type KNHBMatch = {
   dateRaw?: string;
 };
 
+type FavoriteTeam = {
+  id: string;
+  name: string;
+  subtitle?: string;
+};
+
 type UIState = {
   matches: MatchMetadata[];
   selectedMatchId: string;
@@ -57,6 +64,7 @@ type UIState = {
   selectedClubId: string;
   selectedTeamId: string;
   clubQuery: string;
+  favoriteTeams: FavoriteTeam[];
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -77,6 +85,7 @@ const uiState: UIState = {
   selectedClubId: "",
   selectedTeamId: "",
   clubQuery: "",
+  favoriteTeams: loadFavoriteTeams(),
 };
 
 if (uiState.matches.length === 0) {
@@ -173,6 +182,41 @@ function loadMatches(): MatchMetadata[] {
 
 function saveMatches(matches: MatchMetadata[]): void {
   localStorage.setItem(matchesKey, JSON.stringify(matches));
+}
+
+function loadFavoriteTeams(): FavoriteTeam[] {
+  const raw = localStorage.getItem(favoriteTeamsKey);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is FavoriteTeam => {
+      return !!item && typeof item === "object"
+        && typeof (item as { id?: unknown }).id === "string"
+        && typeof (item as { name?: unknown }).name === "string";
+    });
+  } catch {
+    return [];
+  }
+}
+
+function saveFavoriteTeams(favoriteTeams: FavoriteTeam[]): void {
+  localStorage.setItem(favoriteTeamsKey, JSON.stringify(favoriteTeams));
+}
+
+function isFavoriteTeamId(teamId: string): boolean {
+  return uiState.favoriteTeams.some((team) => team.id === teamId);
+}
+
+function addFavoriteTeam(team: FavoriteTeam): void {
+  if (isFavoriteTeamId(team.id)) return;
+  uiState.favoriteTeams = [...uiState.favoriteTeams, team];
+  saveFavoriteTeams(uiState.favoriteTeams);
+}
+
+function removeFavoriteTeam(teamId: string): void {
+  uiState.favoriteTeams = uiState.favoriteTeams.filter((team) => team.id !== teamId);
+  saveFavoriteTeams(uiState.favoriteTeams);
 }
 
 function upsertMatch(match: MatchMetadata): void {
@@ -592,6 +636,8 @@ function render(): void {
     uiState.clubQuery.trim().length > 0
       ? uiState.clubs.filter((club) => club.name.toLowerCase().includes(uiState.clubQuery.trim().toLowerCase()))
       : [];
+  const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
+  const selectedTeamIsFavorite = selectedTeam ? isFavoriteTeamId(selectedTeam.id) : false;
 
   appRoot.innerHTML = `
     <h1>Hockey Timer Web</h1>
@@ -626,6 +672,24 @@ function render(): void {
 
         <h3>Import KNHB</h3>
         <div class="stack">
+          <h4>Favorite Teams</h4>
+          <div class="club-results">
+            ${
+              uiState.favoriteTeams.length === 0
+                ? `<div class="muted">No favorite teams yet</div>`
+                : uiState.favoriteTeams
+                    .map((team) => `
+                      <div class="found-match">
+                        <div><strong>${escapeHtml(team.name)}${team.subtitle ? ` (${escapeHtml(team.subtitle)})` : ""}</strong></div>
+                        <div class="row">
+                          <button class="js-load-favorite-team" data-team-id="${escapeHtml(team.id)}">Load Matches</button>
+                          <button class="js-remove-favorite-team" data-team-id="${escapeHtml(team.id)}">Unfavorite</button>
+                        </div>
+                      </div>
+                    `)
+                    .join("")
+            }
+          </div>
           <button id="loadClubs">Load Clubs</button>
           <input id="clubQuery" type="text" placeholder="Search club" value="${escapeHtml(uiState.clubQuery)}" />
           <div class="club-results">
@@ -650,6 +714,11 @@ function render(): void {
               })
               .join("")}
           </select>
+          ${
+            selectedTeam
+              ? `<button id="toggleFavoriteTeam">${selectedTeamIsFavorite ? "Unfavorite Team" : "Favorite Team"}</button>`
+              : ""
+          }
           <button id="loadMatches" ${uiState.selectedTeamId ? "" : "disabled"}>Load Upcoming Matches</button>
           <div class="found-matches">
             ${uiState.foundMatches
@@ -827,6 +896,39 @@ function wireHandlers(): void {
   loadMatchesButton?.addEventListener("click", () => {
     if (!uiState.selectedTeamId) return;
     void loadKNHBMatches(uiState.selectedTeamId);
+  });
+
+  appRoot.querySelectorAll<HTMLButtonElement>(".js-load-favorite-team").forEach((element) => {
+    element.addEventListener("click", () => {
+      const teamId = element.dataset.teamId;
+      if (!teamId) return;
+      uiState.selectedTeamId = teamId;
+      render();
+      void loadKNHBMatches(teamId);
+    });
+  });
+
+  appRoot.querySelectorAll<HTMLButtonElement>(".js-remove-favorite-team").forEach((element) => {
+    element.addEventListener("click", () => {
+      const teamId = element.dataset.teamId;
+      if (!teamId) return;
+      removeFavoriteTeam(teamId);
+      render();
+    });
+  });
+
+  const toggleFavoriteButton = appRoot.querySelector<HTMLButtonElement>("#toggleFavoriteTeam");
+  toggleFavoriteButton?.addEventListener("click", () => {
+    const selected = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
+    if (!selected) return;
+    if (isFavoriteTeamId(selected.id)) {
+      removeFavoriteTeam(selected.id);
+      uiState.output = "Team removed from favorites.";
+    } else {
+      addFavoriteTeam({ id: selected.id, name: selected.name, subtitle: selected.subtitle });
+      uiState.output = "Team added to favorites.";
+    }
+    render();
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-import-match").forEach((element) => {

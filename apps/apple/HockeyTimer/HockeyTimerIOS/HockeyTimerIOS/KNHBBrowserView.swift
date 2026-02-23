@@ -24,6 +24,48 @@ struct KNHBUpcomingMatch: Identifiable, Hashable {
     let dateRaw: String?
 }
 
+struct KNHBFavoriteTeam: Identifiable, Codable, Hashable {
+    let id: String
+    let name: String
+    let subtitle: String?
+}
+
+final class KNHBFavoriteTeamStore {
+    static let shared = KNHBFavoriteTeamStore()
+
+    private let defaults = UserDefaults.standard
+    private let key = "hockey_timer_ios_knhb_favorite_teams"
+
+    func load() -> [KNHBFavoriteTeam] {
+        guard let data = defaults.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([KNHBFavoriteTeam].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    func isFavorite(teamId: String) -> Bool {
+        load().contains(where: { $0.id == teamId })
+    }
+
+    func add(_ team: KNHBFavoriteTeam) {
+        var teams = load()
+        guard teams.contains(where: { $0.id == team.id }) == false else { return }
+        teams.append(team)
+        save(teams)
+    }
+
+    func remove(teamId: String) {
+        let teams = load().filter { $0.id != teamId }
+        save(teams)
+    }
+
+    private func save(_ teams: [KNHBFavoriteTeam]) {
+        guard let data = try? JSONEncoder().encode(teams) else { return }
+        defaults.set(data, forKey: key)
+    }
+}
+
 @MainActor
 final class KNHBBrowserViewModel: ObservableObject {
     @Published var clubs: [KNHBOption] = []
@@ -84,11 +126,37 @@ struct KNHBBrowserView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = KNHBBrowserViewModel()
     @State private var clubQuery = ""
+    @State private var favoriteTeams: [KNHBFavoriteTeam] = []
 
     let onSelect: (MatchListItem) -> Void
 
     var body: some View {
         List {
+            Section("0. Favorite Teams") {
+                if favoriteTeams.isEmpty {
+                    Text("No favorite teams yet")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(favoriteTeams) { favorite in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(favorite.name + (favorite.subtitle.map { " (\($0))" } ?? ""))
+                            HStack {
+                                Button("Load Matches") {
+                                    model.selectedClubId = nil
+                                    model.selectedTeamId = favorite.id
+                                    model.matches = []
+                                    model.loadMatches()
+                                }
+                                Button("Unfavorite") {
+                                    KNHBFavoriteTeamStore.shared.remove(teamId: favorite.id)
+                                    favoriteTeams = KNHBFavoriteTeamStore.shared.load()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Section("1. Club") {
                 if model.clubs.isEmpty {
                     Button("Load Clubs") { model.loadClubs() }
@@ -131,6 +199,11 @@ struct KNHBBrowserView: View {
                         Text("Choose team").tag(String?.none)
                         ForEach(model.teams) { team in
                             Text(team.displayName).tag(String?.some(team.id))
+                        }
+                    }
+                    if let selectedTeam {
+                        Button(isFavorite(teamId: selectedTeam.id) ? "Unfavorite Team" : "Favorite Team") {
+                            toggleFavorite(selectedTeam)
                         }
                     }
                     Button("Load Upcoming Matches") { model.loadMatches() }
@@ -189,10 +262,16 @@ struct KNHBBrowserView: View {
             }
         }
         .onAppear {
+            favoriteTeams = KNHBFavoriteTeamStore.shared.load()
             if model.clubs.isEmpty {
                 model.loadClubs()
             }
         }
+    }
+
+    private var selectedTeam: KNHBOption? {
+        guard let selectedTeamId = model.selectedTeamId else { return nil }
+        return model.teams.first(where: { $0.id == selectedTeamId })
     }
 
     private var filteredClubs: [KNHBOption] {
@@ -209,7 +288,26 @@ struct KNHBBrowserView: View {
 
     private var selectedTeamName: String? {
         guard let selectedTeamId = model.selectedTeamId else { return nil }
-        return model.teams.first(where: { $0.id == selectedTeamId })?.displayName
+        if let inMemoryTeam = model.teams.first(where: { $0.id == selectedTeamId }) {
+            return inMemoryTeam.displayName
+        }
+        return favoriteTeams.first(where: { $0.id == selectedTeamId }).map { favorite in
+            favorite.name + (favorite.subtitle.map { " (\($0))" } ?? "")
+        }
+    }
+
+    private func isFavorite(teamId: String) -> Bool {
+        favoriteTeams.contains(where: { $0.id == teamId })
+    }
+
+    private func toggleFavorite(_ team: KNHBOption) {
+        let favorite = KNHBFavoriteTeam(id: team.id, name: team.name, subtitle: team.subtitle)
+        if isFavorite(teamId: team.id) {
+            KNHBFavoriteTeamStore.shared.remove(teamId: team.id)
+        } else {
+            KNHBFavoriteTeamStore.shared.add(favorite)
+        }
+        favoriteTeams = KNHBFavoriteTeamStore.shared.load()
     }
 
     private func splitTeams(from title: String) -> (home: String, away: String) {

@@ -30,6 +30,9 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
   - Avoid placeholder labels such as `Home` / `Away` unless source data truly lacks team names.
 - Match metadata persistence:
   - Persist `homeTeam`, `awayTeam`, and `knhbMatchId` for imported matches.
+- Team favorites:
+  - Users can mark/unmark KNHB teams as favorites.
+  - Favorites are stored locally per device for quick team re-selection.
 
 ## Date/Time Rules (Agreed)
 - KNHB datetimes are treated as UTC source values.
