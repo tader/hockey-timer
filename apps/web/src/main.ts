@@ -64,7 +64,10 @@ type UIState = {
   favoriteTeams: FavoriteTeam[];
   activeFavoriteKey?: string;
   events: MatchEvent[];
-  view: "list" | "match";
+  view: "list" | "match" | "create";
+  createMode: "knhb" | "custom";
+  importTarget: "new" | "update";
+  importTargetMatchId?: string;
   sortField: "homeTeam" | "awayTeam" | "matchDateTime" | "clubName" | "teamName" | "source" | "createdAt";
   sortDirection: "asc" | "desc";
   filterHome: string;
@@ -96,6 +99,9 @@ const uiState: UIState = {
   activeFavoriteKey: undefined,
   events: [],
   view: "list",
+  createMode: "knhb",
+  importTarget: "new",
+  importTargetMatchId: undefined,
   sortField: "matchDateTime",
   sortDirection: "desc",
   filterHome: "",
@@ -280,6 +286,62 @@ function upsertMatch(match: MatchMetadata): void {
   saveMatches(uiState.matches);
 }
 
+function createQuickMatch(): MatchMetadata {
+  const now = new Date().toISOString();
+  return {
+    id: `quick-${crypto.randomUUID().toLowerCase()}`,
+    source: "web-custom",
+    createdAt: now,
+    matchDateTime: now,
+    homeTeam: "Home",
+    awayTeam: "Away",
+    clubName: undefined,
+    teamName: "Quick Match",
+  };
+}
+
+function applyImportedMatch(selected: KNHBMatch): void {
+  const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
+  const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
+  const selectedFavorite = uiState.favoriteTeams.find((team) => team.key === uiState.activeFavoriteKey);
+  const base: MatchMetadata = {
+    id: `knhb-${selected.id}`,
+    source: "knhb",
+    createdAt: new Date().toISOString(),
+    homeTeam: selected.homeTeam,
+    awayTeam: selected.awayTeam,
+    matchDateTime: parsePossibleDate(selected.dateRaw),
+    clubName: selectedClub?.abbreviation ?? selectedClub?.name,
+    teamName: selectedFavorite?.name ?? selectedTeam?.name,
+    knhbMatchId: selected.id,
+  };
+
+  if (uiState.importTarget === "update" && uiState.importTargetMatchId) {
+    const existing = uiState.matches.find((item) => item.id === uiState.importTargetMatchId);
+    if (existing) {
+      upsertMatch({
+        ...existing,
+        source: "knhb",
+        homeTeam: base.homeTeam,
+        awayTeam: base.awayTeam,
+        matchDateTime: base.matchDateTime,
+        clubName: base.clubName,
+        teamName: base.teamName,
+        knhbMatchId: base.knhbMatchId,
+      });
+      uiState.selectedMatchId = existing.id;
+    }
+  } else {
+    upsertMatch(base);
+    uiState.selectedMatchId = base.id;
+  }
+
+  localStorage.setItem(selectedMatchIdKey, uiState.selectedMatchId);
+  uiState.events = [];
+  uiState.view = "match";
+  uiState.output = "KNHB metadata applied.";
+}
+
 async function pushEvent(matchId: string, eventType: string, payload: object): Promise<void> {
   const event = {
     eventId: crypto.randomUUID(),
@@ -409,6 +471,23 @@ function formatAmsterdamDateTime(value: string): string {
   }).formatToParts(parsed);
   const lookup = new Map(parts.map((part) => [part.type, part.value]));
   return `${lookup.get("day") ?? "00"}-${lookup.get("month") ?? "00"}-${lookup.get("year") ?? "0000"} ${lookup.get("hour") ?? "00"}:${lookup.get("minute") ?? "00"}:${lookup.get("second") ?? "00"}`;
+}
+
+function formatForDateTimeLocal(value?: string): string {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "";
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const lookup = new Map(parts.map((part) => [part.type, part.value]));
+  return `${lookup.get("year")}-${lookup.get("month")}-${lookup.get("day")}T${lookup.get("hour")}:${lookup.get("minute")}`;
 }
 
 function summarizePayload(payload?: Record<string, unknown>): string {
@@ -880,7 +959,7 @@ function timerFromLocalProjection(local: LocalProjection): { label: string; isOv
   return { label: `+${formatClock(Math.abs(remaining))}`, isOverrun: true };
 }
 
-function renderKNHBImportSection(): string {
+function renderKNHBImportSection(title = "Import KNHB", importButton = "Import"): string {
   const filteredClubs =
     uiState.clubQuery.trim().length > 0
       ? uiState.clubs.filter((club) => club.name.toLowerCase().includes(uiState.clubQuery.trim().toLowerCase()))
@@ -894,7 +973,7 @@ function renderKNHBImportSection(): string {
 
   return `
     <section class="card">
-      <h3>Import KNHB</h3>
+      <h3>${escapeHtml(title)}</h3>
       <div class="stack">
         <h4>Favorite Teams</h4>
         <div class="club-results">
@@ -941,7 +1020,7 @@ function renderKNHBImportSection(): string {
               <div class="found-match">
                 <div><strong>${escapeHtml(match.homeTeam)} – ${escapeHtml(match.awayTeam)}</strong></div>
                 <div class="muted">${escapeHtml(label)}</div>
-                <button class="js-import-match" data-knhb-match-id="${escapeHtml(match.id)}">Import</button>
+                <button class="js-import-match" data-knhb-match-id="${escapeHtml(match.id)}">${escapeHtml(importButton)}</button>
               </div>
             `;
           }).join("")}
@@ -957,7 +1036,11 @@ function renderListView(): string {
     <section class="card">
       <div class="title-row">
         <h2>Matches</h2>
-        <span class="muted">${rows.length} shown</span>
+        <div class="row">
+          <span class="muted">${rows.length} shown</span>
+          <button id="newMatch">New Match</button>
+          <button id="quickMatchList" class="ghost">Quick Match</button>
+        </div>
       </div>
       <div class="filters-grid">
         <input id="filterHome" placeholder="Filter home" value="${escapeHtml(uiState.filterHome)}" />
@@ -993,19 +1076,43 @@ function renderListView(): string {
         </table>
       </div>
     </section>
+  `;
+}
+
+function renderCreateView(): string {
+  const targetLabel = uiState.importTarget === "update" ? "Assign KNHB To Current Match" : "Import KNHB Match";
+  const importAction = uiState.importTarget === "update" ? "Assign To Match" : "Create Match";
+  return `
     <section class="card">
-      <h3>Create Match</h3>
-      <div class="stack">
-        <input id="createHome" type="text" placeholder="Home team" />
-        <input id="createAway" type="text" placeholder="Away team" />
-        <input id="createClub" type="text" placeholder="Club (optional)" />
-        <input id="createTeam" type="text" placeholder="Team (optional)" />
-        <label for="createDateTime">Match date/time (optional)</label>
-        <input id="createDateTime" type="datetime-local" />
-        <button id="createMatch">Create Match</button>
+      <div class="title-row">
+        <h2>Create Match</h2>
+        <button id="backFromCreate" class="ghost">Back</button>
+      </div>
+      <p class="muted">Default flow: import from KNHB. Use custom only if needed.</p>
+      <div class="row">
+        <button id="modeKNHB" ${uiState.createMode === "knhb" ? "disabled" : ""}>KNHB Import</button>
+        <button id="modeCustom" class="ghost" ${uiState.createMode === "custom" ? "disabled" : ""}>Custom Match</button>
+        <button id="quickMatchCreate">Quick Match (Now)</button>
       </div>
     </section>
-    ${renderKNHBImportSection()}
+    ${
+      uiState.createMode === "custom"
+        ? `
+          <section class="card">
+            <h3>Custom Match</h3>
+            <div class="stack">
+              <input id="createHome" type="text" placeholder="Home team" />
+              <input id="createAway" type="text" placeholder="Away team" />
+              <input id="createClub" type="text" placeholder="Club (optional)" />
+              <input id="createTeam" type="text" placeholder="Team (optional)" />
+              <label for="createDateTime">Match date/time</label>
+              <input id="createDateTime" type="datetime-local" />
+              <button id="createMatch">Create Custom Match</button>
+            </div>
+          </section>
+        `
+        : renderKNHBImportSection(targetLabel, importAction)
+    }
   `;
 }
 
@@ -1048,6 +1155,24 @@ function renderMatchView(match: MatchMetadata): string {
         <button class="js-action" data-action="awayMinus">Away -1 <kbd>Shift+A</kbd></button>
         <button id="poll">Refresh <kbd>R</kbd></button>
       </div>
+      <section class="card">
+        <div class="title-row">
+          <h3>Match Metadata</h3>
+          <button id="assignFromKNHB" class="ghost">Import/Assign KNHB</button>
+        </div>
+        <div class="filters-grid">
+          <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
+          <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
+          <input id="editClub" value="${escapeHtml(match.clubName ?? "")}" placeholder="Club" />
+          <input id="editTeam" value="${escapeHtml(match.teamName ?? "")}" placeholder="Team" />
+          <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
+        </div>
+        <div class="row">
+          <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
+          <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
+          <button id="saveMetadata">Save Metadata</button>
+        </div>
+      </section>
       <h3>Events</h3>
       <div id="liveEvents" class="events-list">${renderEventsList()}</div>
       <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
@@ -1059,7 +1184,9 @@ function render(): void {
   const selectedMatch = getSelectedMatch();
   const body = uiState.view === "match" && selectedMatch
     ? renderMatchView(selectedMatch)
-    : renderListView();
+    : uiState.view === "create"
+      ? renderCreateView()
+      : renderListView();
 
   appRoot.innerHTML = `
     <h1>Hockey Timer</h1>
@@ -1186,6 +1313,8 @@ function wireHandlers(): void {
 
   appRoot.querySelector<HTMLButtonElement>("#backToList")?.addEventListener("click", () => {
     uiState.view = "list";
+    uiState.importTarget = "new";
+    uiState.importTargetMatchId = undefined;
     render();
   });
 
@@ -1212,6 +1341,51 @@ function wireHandlers(): void {
     });
   }
 
+  appRoot.querySelector<HTMLButtonElement>("#newMatch")?.addEventListener("click", () => {
+    uiState.view = "create";
+    uiState.createMode = "knhb";
+    uiState.importTarget = "new";
+    uiState.importTargetMatchId = undefined;
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#quickMatchList")?.addEventListener("click", () => {
+    const metadata = createQuickMatch();
+    upsertMatch(metadata);
+    uiState.selectedMatchId = metadata.id;
+    localStorage.setItem(selectedMatchIdKey, metadata.id);
+    uiState.events = [];
+    uiState.view = "match";
+    render();
+    void refreshProjection();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#backFromCreate")?.addEventListener("click", () => {
+    uiState.view = uiState.importTarget === "update" ? "match" : "list";
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#modeKNHB")?.addEventListener("click", () => {
+    uiState.createMode = "knhb";
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#modeCustom")?.addEventListener("click", () => {
+    uiState.createMode = "custom";
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#quickMatchCreate")?.addEventListener("click", () => {
+    const metadata = createQuickMatch();
+    upsertMatch(metadata);
+    uiState.selectedMatchId = metadata.id;
+    localStorage.setItem(selectedMatchIdKey, metadata.id);
+    uiState.events = [];
+    uiState.view = "match";
+    render();
+    void refreshProjection();
+  });
+
   appRoot.querySelector<HTMLButtonElement>("#createMatch")?.addEventListener("click", () => {
     const homeTeam = (appRoot.querySelector<HTMLInputElement>("#createHome")?.value ?? "").trim() || "Home";
     const awayTeam = (appRoot.querySelector<HTMLInputElement>("#createAway")?.value ?? "").trim() || "Away";
@@ -1231,6 +1405,8 @@ function wireHandlers(): void {
     upsertMatch(metadata);
     uiState.selectedMatchId = metadata.id;
     uiState.view = "match";
+    uiState.importTarget = "new";
+    uiState.importTargetMatchId = undefined;
     localStorage.setItem(selectedMatchIdKey, metadata.id);
     uiState.events = [];
     render();
@@ -1334,25 +1510,7 @@ function wireHandlers(): void {
       if (!matchId) return;
       const selected = uiState.foundMatches.find((match) => match.id === matchId);
       if (!selected) return;
-      const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
-      const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
-      const selectedFavorite = uiState.favoriteTeams.find((team) => team.key === uiState.activeFavoriteKey);
-      const metadata: MatchMetadata = {
-        id: `knhb-${selected.id}`,
-        source: "knhb",
-        createdAt: new Date().toISOString(),
-        homeTeam: selected.homeTeam,
-        awayTeam: selected.awayTeam,
-        matchDateTime: parsePossibleDate(selected.dateRaw),
-        clubName: selectedClub?.abbreviation ?? selectedClub?.name,
-        teamName: selectedFavorite?.name ?? selectedTeam?.name,
-        knhbMatchId: selected.id,
-      };
-      upsertMatch(metadata);
-      uiState.selectedMatchId = metadata.id;
-      uiState.view = "match";
-      localStorage.setItem(selectedMatchIdKey, metadata.id);
-      uiState.events = [];
+      applyImportedMatch(selected);
       render();
       void refreshProjection();
     });
@@ -1360,6 +1518,39 @@ function wireHandlers(): void {
 
   appRoot.querySelector<HTMLButtonElement>("#poll")?.addEventListener("click", () => {
     void refreshProjection();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#assignFromKNHB")?.addEventListener("click", () => {
+    const selected = getSelectedMatch();
+    if (!selected) return;
+    uiState.importTarget = "update";
+    uiState.importTargetMatchId = selected.id;
+    uiState.view = "create";
+    uiState.createMode = "knhb";
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#saveMetadata")?.addEventListener("click", () => {
+    const selected = getSelectedMatch();
+    if (!selected) return;
+    const homeTeam = (appRoot.querySelector<HTMLInputElement>("#editHome")?.value ?? "").trim() || "Home";
+    const awayTeam = (appRoot.querySelector<HTMLInputElement>("#editAway")?.value ?? "").trim() || "Away";
+    const clubName = (appRoot.querySelector<HTMLInputElement>("#editClub")?.value ?? "").trim();
+    const teamName = (appRoot.querySelector<HTMLInputElement>("#editTeam")?.value ?? "").trim();
+    const knhbMatchId = (appRoot.querySelector<HTMLInputElement>("#editKNHBMatchId")?.value ?? "").trim();
+    const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#editDateTime")?.value ?? "";
+    upsertMatch({
+      ...selected,
+      homeTeam,
+      awayTeam,
+      clubName: clubName || undefined,
+      teamName: teamName || undefined,
+      knhbMatchId: knhbMatchId || undefined,
+      matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
+    });
+    uiState.output = "Match metadata saved.";
+    render();
+    syncLivePanel();
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-action").forEach((element) => {
