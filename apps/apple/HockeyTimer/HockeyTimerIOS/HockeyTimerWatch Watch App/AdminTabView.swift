@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AdminTabView: View {
     @EnvironmentObject private var model: WatchMatchViewModel
+    @State private var showApiSettings = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -19,12 +20,16 @@ struct AdminTabView: View {
             Button("Format") {}
             Button("Events") {}
             Button("Share") {}
-            Button("Settings") {}
+            Button("API Settings") { showApiSettings = true }
             Button("End Match") { model.endMatch() }
                 .tint(.red)
         }
         .buttonStyle(.bordered)
         .padding(8)
+        .sheet(isPresented: $showApiSettings) {
+            WatchApiSettingsView()
+                .environmentObject(model)
+        }
     }
 }
 

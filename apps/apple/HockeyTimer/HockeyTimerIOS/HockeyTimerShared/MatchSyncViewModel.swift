@@ -13,23 +13,26 @@ class MatchSyncViewModel: ObservableObject {
     @Published var lastError: String?
 
     private let matchId: String
-    private let apiBase: String
     private let originPlatform: String
     private let deviceIdKey: String
     private let sequenceKey: String
+    private let apiBaseKey: String
+    private let defaultApiBase: String
 
     init(
         matchId: String,
-        apiBase: String,
         originPlatform: String,
         deviceIdKey: String,
-        sequenceKey: String
+        sequenceKey: String,
+        apiBaseKey: String,
+        defaultApiBase: String
     ) {
         self.matchId = matchId
-        self.apiBase = apiBase
         self.originPlatform = originPlatform
         self.deviceIdKey = deviceIdKey
         self.sequenceKey = sequenceKey
+        self.apiBaseKey = apiBaseKey
+        self.defaultApiBase = defaultApiBase
     }
 
     var stateLabel: String {
@@ -47,6 +50,16 @@ class MatchSyncViewModel: ObservableObject {
             return "\(format(seconds: remaining)) remaining"
         }
         return "+\(format(seconds: abs(remaining))) over"
+    }
+
+    var currentApiBase: String {
+        UserDefaults.standard.string(forKey: apiBaseKey) ?? defaultApiBase
+    }
+
+    func updateApiBase(_ value: String) {
+        let sanitized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sanitized.isEmpty else { return }
+        UserDefaults.standard.set(sanitized, forKey: apiBaseKey)
     }
 
     func refreshProjection() {
@@ -111,7 +124,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func pushEvent(eventType: String, payload: MatchEventPayload) async throws {
-        guard let url = URL(string: "\(apiBase)/matches/\(matchId)/events:batchUpsert") else {
+        guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/events:batchUpsert") else {
             return
         }
 
@@ -140,7 +153,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func fetchProjection() async throws -> MatchProjectionDTO {
-        guard let url = URL(string: "\(apiBase)/matches/\(matchId)/projection") else {
+        guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/projection") else {
             throw NSError(domain: "MatchSyncViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid projection URL"])
         }
 
