@@ -63,7 +63,8 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - KNHB datetime handling:
   - Treat KNHB source date/time as UTC.
   - Display KNHB dates/times in `Europe/Amsterdam`.
-  - If only date is known and source time is `00:00:00 UTC`, still convert and display in `Europe/Amsterdam` local date/time.
+  - If only date is known and source time is `00:00:00 UTC`, treat time as unknown:
+    convert to `Europe/Amsterdam` local date, then display local time as `00:00:00`.
 
 ## Match List & Metadata UX
 - Users can create custom matches.

@@ -292,10 +292,8 @@ function formatAmsterdamDateTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.valueOf())) return value;
 
-  // KNHB date-only values are represented as 00:00:00 UTC; display as next local day convenience.
-  const adjusted = isUtcMidnight(parsed) ? new Date(parsed.getTime() + 24 * 60 * 60 * 1000) : parsed;
-
-  return new Intl.DateTimeFormat("nl-NL", {
+  const timeKnown = !isUtcMidnight(parsed);
+  const parts = new Intl.DateTimeFormat("nl-NL", {
     timeZone: "Europe/Amsterdam",
     year: "numeric",
     month: "2-digit",
@@ -303,7 +301,18 @@ function formatAmsterdamDateTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  }).format(adjusted);
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+
+  const lookup = new Map(parts.map((part) => [part.type, part.value]));
+  const day = lookup.get("day") ?? "00";
+  const month = lookup.get("month") ?? "00";
+  const year = lookup.get("year") ?? "0000";
+  const hour = timeKnown ? lookup.get("hour") ?? "00" : "00";
+  const minute = timeKnown ? lookup.get("minute") ?? "00" : "00";
+  const second = timeKnown ? lookup.get("second") ?? "00" : "00";
+
+  return `${day}-${month}-${year} ${hour}:${minute}:${second}`;
 }
 
 function isUtcMidnight(date: Date): boolean {

@@ -325,17 +325,27 @@ enum MatchDateFormatters {
 
     static let list: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_NL")
         formatter.timeZone = amsterdamTimeZone
         formatter.dateStyle = .medium
-        formatter.timeStyle = .short
+        formatter.timeStyle = .medium
         return formatter
     }()
 
     static func display(_ date: Date) -> String {
-        let adjusted = isUtcMidnight(date)
-            ? date.addingTimeInterval(24 * 60 * 60)
-            : date
-        return list.string(from: adjusted)
+        let timeKnown = !isUtcMidnight(date)
+        guard !timeKnown else {
+            return list.string(from: date)
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = amsterdamTimeZone
+        var components = calendar.dateComponents([.year, .month, .day], from: date)
+        components.hour = 0
+        components.minute = 0
+        components.second = 0
+        let localMidnight = calendar.date(from: components) ?? date
+        return list.string(from: localMidnight)
     }
 
     private static func isUtcMidnight(_ date: Date) -> Bool {
