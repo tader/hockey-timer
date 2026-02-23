@@ -49,8 +49,3 @@ struct TimeTabView: View {
         .padding(8)
     }
 }
-
-#Preview {
-    TimeTabView()
-        .environmentObject(WatchMatchViewModel())
-}

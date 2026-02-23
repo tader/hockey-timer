@@ -1,9 +1,9 @@
 import Foundation
 
 final class IOSMatchViewModel: MatchSyncViewModel {
-    init() {
+    init(matchId: String = "demo-match") {
         super.init(
-            matchId: "demo-match",
+            matchId: matchId,
             originPlatform: "ios",
             deviceIdKey: "hockey_timer_ios_device_id",
             sequenceKey: "hockey_timer_ios_sequence",

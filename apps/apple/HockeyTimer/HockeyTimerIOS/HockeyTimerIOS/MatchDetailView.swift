@@ -2,15 +2,25 @@ import SwiftUI
 import Combine
 
 struct MatchDetailView: View {
-    @StateObject private var model = IOSMatchViewModel()
+    let match: MatchListItem
+    @StateObject private var model: IOSMatchViewModel
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     @State private var apiBaseDraft = ""
 
+    init(match: MatchListItem = MatchListItem(id: "demo-match", title: "Demo Match", subtitle: nil, source: "local")) {
+        self.match = match
+        _model = StateObject(wrappedValue: IOSMatchViewModel(matchId: match.id))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Demo Match")
+            Text(match.title)
                 .font(.title2)
                 .bold()
+            if let subtitle = match.subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.subheadline)
+            }
 
             Text("Home \(model.homeScore) - \(model.awayScore) Away")
                 .font(.headline)
@@ -70,11 +80,5 @@ struct MatchDetailView: View {
         .onReceive(poller) { _ in
             model.refreshProjection()
         }
-    }
-}
-
-#Preview {
-    NavigationStack {
-        MatchDetailView()
     }
 }

@@ -34,8 +34,3 @@ struct ScoreTabView: View {
         .padding(8)
     }
 }
-
-#Preview {
-    ScoreTabView()
-        .environmentObject(WatchMatchViewModel())
-}

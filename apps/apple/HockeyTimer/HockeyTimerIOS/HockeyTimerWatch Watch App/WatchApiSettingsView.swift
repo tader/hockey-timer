@@ -26,8 +26,3 @@ struct WatchApiSettingsView: View {
     }
 }
 
-#Preview {
-    WatchApiSettingsView()
-        .environmentObject(WatchMatchViewModel())
-}
-

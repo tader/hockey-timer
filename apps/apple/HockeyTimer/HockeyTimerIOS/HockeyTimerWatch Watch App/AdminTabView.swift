@@ -32,8 +32,3 @@ struct AdminTabView: View {
         }
     }
 }
-
-#Preview {
-    AdminTabView()
-        .environmentObject(WatchMatchViewModel())
-}

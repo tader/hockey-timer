@@ -21,7 +21,3 @@ struct WatchRootTabView: View {
         }
     }
 }
-
-#Preview {
-    WatchRootTabView()
-}
