@@ -215,15 +215,44 @@ struct KNHBBrowserView: View {
     }
 
     private func parseKNHBDate(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let epochMs = Double(trimmed), epochMs > 10_000_000_000 {
+            return Date(timeIntervalSince1970: epochMs / 1000)
+        }
+        if let epoch = Double(trimmed), epoch > 1_000_000_000 {
+            return Date(timeIntervalSince1970: epoch)
+        }
+
         let iso = ISO8601DateFormatter()
-        if let date = iso.date(from: value) {
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) {
+            return date
+        }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) {
             return date
         }
 
         let fallback = DateFormatter()
         fallback.locale = Locale(identifier: "nl_NL")
-        fallback.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return fallback.date(from: value)
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX",
+            "dd-MM-yyyy HH:mm",
+            "dd-MM-yyyy HH:mm:ss"
+        ]
+        for format in formats {
+            fallback.dateFormat = format
+            if let date = fallback.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
     }
 }
 
@@ -273,14 +302,35 @@ struct KNHBApiClient {
 
         let objects = try jsonObjects(from: data)
         return objects.compactMap { dict in
-            guard let id = stringValue(in: dict, keys: ["id", "matchId", "wedstrijdcode"]) else {
+            guard let id = firstString(
+                in: dict,
+                keys: ["id", "matchId", "wedstrijdcode", "wedstrijdnummer", "code"]
+            ) else {
                 return nil
             }
 
-            let home = stringValue(in: dict, keys: ["homeTeamName", "homeTeam", "thuisteam", "teamhome"]) ?? "Home"
-            let away = stringValue(in: dict, keys: ["awayTeamName", "awayTeam", "uitteam", "teamaway"]) ?? "Away"
-            let date = stringValue(in: dict, keys: ["date", "datum", "startDateTime", "start"])
-                ?? "Date unknown"
+            let home = firstString(
+                in: dict,
+                keys: [
+                    "homeTeamName", "homeTeam", "teamhome", "thuisteam",
+                    "home_team_name", "team_thuis", "thuis_team", "home_name"
+                ]
+            ) ?? "Home"
+            let away = firstString(
+                in: dict,
+                keys: [
+                    "awayTeamName", "awayTeam", "teamaway", "uitteam",
+                    "away_team_name", "team_uit", "uit_team", "away_name"
+                ]
+            ) ?? "Away"
+            let date = firstString(
+                in: dict,
+                keys: [
+                    "date", "datum", "startDateTime", "start",
+                    "starttime", "starttijd", "aanvang", "aanvangstijd",
+                    "plannedStart", "beginDateTime", "speeldatum", "datetime"
+                ]
+            ) ?? "Date unknown"
 
             return KNHBUpcomingMatch(id: id, title: "\(home) vs \(away)", subtitle: date)
         }
@@ -333,6 +383,58 @@ struct KNHBApiClient {
             }
             if let value = dict[key] as? Int {
                 return String(value)
+            }
+        }
+        return nil
+    }
+
+    private func firstString(in dict: [String: Any], keys: [String]) -> String? {
+        let lowerKeys = Set(keys.map { $0.lowercased() })
+        return recursiveString(in: dict, allowedLowerKeys: lowerKeys)
+    }
+
+    private func recursiveString(in value: Any, allowedLowerKeys: Set<String>) -> String? {
+        if let dict = value as? [String: Any] {
+            for (key, nested) in dict {
+                if allowedLowerKeys.contains(key.lowercased()) {
+                    if let string = scalarString(from: nested) {
+                        return string
+                    }
+                }
+            }
+            for (_, nested) in dict {
+                if let found = recursiveString(in: nested, allowedLowerKeys: allowedLowerKeys) {
+                    return found
+                }
+            }
+            return nil
+        }
+
+        if let array = value as? [Any] {
+            for nested in array {
+                if let found = recursiveString(in: nested, allowedLowerKeys: allowedLowerKeys) {
+                    return found
+                }
+            }
+        }
+        return nil
+    }
+
+    private func scalarString(from value: Any) -> String? {
+        if let string = value as? String, !string.isEmpty {
+            return string
+        }
+        if let int = value as? Int {
+            return String(int)
+        }
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+        if let nested = value as? [String: Any] {
+            for key in ["name", "naam", "teamnaam", "omschrijving", "label", "value", "text"] {
+                if let direct = nested[key] as? String, !direct.isEmpty {
+                    return direct
+                }
             }
         }
         return nil
