@@ -2,21 +2,145 @@ import SwiftUI
 
 struct MatchListItem: Identifiable, Codable, Hashable {
     let id: String
-    let title: String
-    let subtitle: String?
     let source: String
+    let createdAt: Date
+    let matchDateTime: Date?
+    let homeTeam: String
+    let awayTeam: String
+    let clubName: String?
+    let teamName: String?
+
+    var title: String {
+        "\(homeTeam) vs \(awayTeam)"
+    }
+
+    var subtitle: String {
+        var parts: [String] = []
+        if let matchDateTime {
+            parts.append(MatchDateFormatters.list.string(from: matchDateTime))
+        }
+        if let clubName, !clubName.isEmpty {
+            parts.append(clubName)
+        }
+        if let teamName, !teamName.isEmpty {
+            parts.append(teamName)
+        }
+        if parts.isEmpty {
+            return "No metadata"
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    init(
+        id: String,
+        source: String,
+        createdAt: Date = Date(),
+        matchDateTime: Date? = nil,
+        homeTeam: String,
+        awayTeam: String,
+        clubName: String? = nil,
+        teamName: String? = nil
+    ) {
+        self.id = id
+        self.source = source
+        self.createdAt = createdAt
+        self.matchDateTime = matchDateTime
+        self.homeTeam = homeTeam
+        self.awayTeam = awayTeam
+        self.clubName = clubName
+        self.teamName = teamName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        source = (try? container.decode(String.self, forKey: .source)) ?? "local"
+        createdAt = (try? container.decode(Date.self, forKey: .createdAt)) ?? Date()
+        matchDateTime = try? container.decode(Date.self, forKey: .matchDateTime)
+        clubName = try? container.decode(String.self, forKey: .clubName)
+        teamName = try? container.decode(String.self, forKey: .teamName)
+
+        if let home = try? container.decode(String.self, forKey: .homeTeam),
+           let away = try? container.decode(String.self, forKey: .awayTeam) {
+            homeTeam = home
+            awayTeam = away
+            return
+        }
+
+        let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+        let legacyTitle = (try? legacyContainer.decode(String.self, forKey: .title)) ?? "Home vs Away"
+        let split = legacyTitle.components(separatedBy: " vs ")
+        if split.count == 2 {
+            homeTeam = split[0]
+            awayTeam = split[1]
+        } else {
+            homeTeam = legacyTitle
+            awayTeam = "Away"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case source
+        case createdAt
+        case matchDateTime
+        case homeTeam
+        case awayTeam
+        case clubName
+        case teamName
+    }
+
+    private enum LegacyCodingKeys: String, CodingKey {
+        case title
+    }
+}
+
+enum MatchListSheet: String, Identifiable {
+    case custom
+    case knhb
+
+    var id: String { rawValue }
 }
 
 struct MatchListView: View {
     @State private var matches: [MatchListItem] = []
-    @State private var isShowingKNHB = false
+    @State private var activeSheet: MatchListSheet?
+    @State private var filterHome = ""
+    @State private var filterAway = ""
+    @State private var filterClub = ""
+    @State private var filterTeam = ""
 
     var body: some View {
         List {
+            Section("Filters") {
+                TextField("Home team", text: $filterHome)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Away team", text: $filterAway)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Club", text: $filterClub)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Team", text: $filterTeam)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+
             Section("Public Matches") {
-                ForEach(matches) { match in
-                    NavigationLink(match.title) {
-                        MatchDetailView(match: match)
+                ForEach(filteredAndSortedMatches) { match in
+                    NavigationLink {
+                        MatchDetailView(match: match) { _ in
+                            matches = MatchStore.shared.load()
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(match.title)
+                                .font(.headline)
+                            Text(match.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -24,23 +148,62 @@ struct MatchListView: View {
         .navigationTitle("Hockey Timer")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Import KNHB") {
-                    isShowingKNHB = true
+                Menu("Add Match") {
+                    Button("Custom Match") {
+                        activeSheet = .custom
+                    }
+                    Button("Import KNHB") {
+                        activeSheet = .knhb
+                    }
                 }
             }
         }
-        .sheet(isPresented: $isShowingKNHB) {
-            NavigationStack {
-                KNHBBrowserView { imported in
-                    MatchStore.shared.upsert(imported)
-                    matches = MatchStore.shared.load()
-                    isShowingKNHB = false
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .custom:
+                NavigationStack {
+                    MatchMetadataEditorView(
+                        title: "New Match",
+                        match: MatchListItem(
+                            id: "custom-\(UUID().uuidString.lowercased())",
+                            source: "custom",
+                            homeTeam: "Home",
+                            awayTeam: "Away"
+                        )
+                    ) { created in
+                        MatchStore.shared.upsert(created)
+                        matches = MatchStore.shared.load()
+                        activeSheet = nil
+                    }
+                }
+            case .knhb:
+                NavigationStack {
+                    KNHBBrowserView { imported in
+                        MatchStore.shared.upsert(imported)
+                        matches = MatchStore.shared.load()
+                        activeSheet = nil
+                    }
                 }
             }
         }
         .onAppear {
             matches = MatchStore.shared.load()
         }
+    }
+
+    private var filteredAndSortedMatches: [MatchListItem] {
+        matches
+            .filter { match in
+                (filterHome.isEmpty || match.homeTeam.localizedCaseInsensitiveContains(filterHome))
+                && (filterAway.isEmpty || match.awayTeam.localizedCaseInsensitiveContains(filterAway))
+                && (filterClub.isEmpty || (match.clubName ?? "").localizedCaseInsensitiveContains(filterClub))
+                && (filterTeam.isEmpty || (match.teamName ?? "").localizedCaseInsensitiveContains(filterTeam))
+            }
+            .sorted { lhs, rhs in
+                let leftDate = lhs.matchDateTime ?? lhs.createdAt
+                let rightDate = rhs.matchDateTime ?? rhs.createdAt
+                return leftDate > rightDate
+            }
     }
 }
 
@@ -54,7 +217,15 @@ final class MatchStore {
         guard let data = defaults.data(forKey: key),
               let decoded = try? JSONDecoder().decode([MatchListItem].self, from: data),
               !decoded.isEmpty else {
-            let initial = [MatchListItem(id: "demo-match", title: "Demo Match", subtitle: nil, source: "local")]
+            let initial = [MatchListItem(
+                id: "demo-match",
+                source: "local",
+                matchDateTime: Date(),
+                homeTeam: "Home",
+                awayTeam: "Away",
+                clubName: "Demo Club",
+                teamName: "Demo Team"
+            )]
             save(initial)
             return initial
         }
@@ -75,4 +246,79 @@ final class MatchStore {
         guard let data = try? JSONEncoder().encode(matches) else { return }
         defaults.set(data, forKey: key)
     }
+}
+
+struct MatchMetadataEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let match: MatchListItem
+    let onSave: (MatchListItem) -> Void
+
+    @State private var homeTeam = ""
+    @State private var awayTeam = ""
+    @State private var clubName = ""
+    @State private var teamName = ""
+    @State private var hasDate = true
+    @State private var matchDate = Date()
+
+    var body: some View {
+        Form {
+            Section("Teams") {
+                TextField("Home team", text: $homeTeam)
+                TextField("Away team", text: $awayTeam)
+            }
+            Section("Metadata") {
+                Toggle("Set match date/time", isOn: $hasDate)
+                if hasDate {
+                    DatePicker("Match date/time", selection: $matchDate)
+                }
+                TextField("Club", text: $clubName)
+                TextField("Team", text: $teamName)
+            }
+        }
+        .navigationTitle(title)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    let updated = MatchListItem(
+                        id: match.id,
+                        source: match.source,
+                        createdAt: match.createdAt,
+                        matchDateTime: hasDate ? matchDate : nil,
+                        homeTeam: homeTeam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Home" : homeTeam.trimmingCharacters(in: .whitespacesAndNewlines),
+                        awayTeam: awayTeam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Away" : awayTeam.trimmingCharacters(in: .whitespacesAndNewlines),
+                        clubName: clubName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : clubName.trimmingCharacters(in: .whitespacesAndNewlines),
+                        teamName: teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : teamName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                    onSave(updated)
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            homeTeam = match.homeTeam
+            awayTeam = match.awayTeam
+            clubName = match.clubName ?? ""
+            teamName = match.teamName ?? ""
+            if let matchDateTime = match.matchDateTime {
+                hasDate = true
+                matchDate = matchDateTime
+            } else {
+                hasDate = false
+                matchDate = Date()
+            }
+        }
+    }
+}
+
+enum MatchDateFormatters {
+    static let list: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }

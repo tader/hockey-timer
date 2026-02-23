@@ -2,25 +2,29 @@ import SwiftUI
 import Combine
 
 struct MatchDetailView: View {
-    let match: MatchListItem
+    @State private var editableMatch: MatchListItem
     @StateObject private var model: IOSMatchViewModel
+    let onMetadataSaved: ((MatchListItem) -> Void)?
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     @State private var apiBaseDraft = ""
+    @State private var isEditingMetadata = false
 
-    init(match: MatchListItem = MatchListItem(id: "demo-match", title: "Demo Match", subtitle: nil, source: "local")) {
-        self.match = match
+    init(
+        match: MatchListItem = MatchListItem(id: "demo-match", source: "local", homeTeam: "Home", awayTeam: "Away"),
+        onMetadataSaved: ((MatchListItem) -> Void)? = nil
+    ) {
+        _editableMatch = State(initialValue: match)
+        self.onMetadataSaved = onMetadataSaved
         _model = StateObject(wrappedValue: IOSMatchViewModel(matchId: match.id))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(match.title)
+            Text(editableMatch.title)
                 .font(.title2)
                 .bold()
-            if let subtitle = match.subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.subheadline)
-            }
+            Text(editableMatch.subtitle)
+                .font(.subheadline)
 
             Text("Home \(model.homeScore) - \(model.awayScore) Away")
                 .font(.headline)
@@ -50,6 +54,9 @@ struct MatchDetailView: View {
             Text("Role: RO (default join)")
             Text("Sign-in optional")
             Text("Polling sync: every few seconds")
+            Button("Edit Match Metadata") {
+                isEditingMetadata = true
+            }
             Text("API Base")
                 .font(.headline)
             TextField("http://192.168.1.153:8787", text: $apiBaseDraft)
@@ -73,6 +80,15 @@ struct MatchDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
         .navigationTitle("Match")
+        .sheet(isPresented: $isEditingMetadata) {
+            NavigationStack {
+                MatchMetadataEditorView(title: "Edit Match", match: editableMatch) { updated in
+                    editableMatch = updated
+                    MatchStore.shared.upsert(updated)
+                    onMetadataSaved?(updated)
+                }
+            }
+        }
         .onAppear {
             apiBaseDraft = model.currentApiBase
             model.refreshProjection()

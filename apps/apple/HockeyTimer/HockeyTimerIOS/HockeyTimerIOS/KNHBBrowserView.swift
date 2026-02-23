@@ -136,9 +136,10 @@ struct KNHBBrowserView: View {
                         Button {
                             let item = MatchListItem(
                                 id: "knhb-\(match.id)",
-                                title: match.title,
-                                subtitle: match.subtitle,
-                                source: "knhb"
+                                source: "knhb",
+                                matchDateTime: parseKNHBDate(match.subtitle),
+                                homeTeam: splitTeams(from: match.title).home,
+                                awayTeam: splitTeams(from: match.title).away
                             )
                             onSelect(item)
                             dismiss()
@@ -184,6 +185,26 @@ struct KNHBBrowserView: View {
         let normalized = clubQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return [] }
         return model.clubs.filter { $0.name.localizedCaseInsensitiveContains(normalized) }
+    }
+
+    private func splitTeams(from title: String) -> (home: String, away: String) {
+        let parts = title.components(separatedBy: " vs ")
+        if parts.count == 2 {
+            return (parts[0], parts[1])
+        }
+        return (title, "Away")
+    }
+
+    private func parseKNHBDate(_ value: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        if let date = iso.date(from: value) {
+            return date
+        }
+
+        let fallback = DateFormatter()
+        fallback.locale = Locale(identifier: "nl_NL")
+        fallback.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return fallback.date(from: value)
     }
 }
 
