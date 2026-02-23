@@ -1,0 +1,15 @@
+{
+  "name": "@hockey-timer/events-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/handlers.js",
+  "types": "dist/handlers.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hockey-timer/event-schema": "0.1.0",
+    "@hockey-timer/replay-engine": "0.1.0"
+  }
+}

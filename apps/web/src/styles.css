@@ -1,0 +1,45 @@
+:root {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0e1b22;
+  background: #f5f9fc;
+}
+
+body {
+  margin: 0;
+  padding: 2rem;
+}
+
+.card {
+  background: white;
+  border: 1px solid #d0dce4;
+  border-radius: 12px;
+  padding: 1rem;
+  max-width: 28rem;
+}
+
+button {
+  background: #0d5ea8;
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+pre {
+  margin-top: 0.75rem;
+  background: #f0f5f9;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.overrun {
+  color: #b00020;
+}

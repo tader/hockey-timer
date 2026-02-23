@@ -1,0 +1,11 @@
+{
+  "name": "@hockey-timer/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && cp index.html dist/index.html && cp src/styles.css dist/styles.css",
+    "serve": "python3 -m http.server 4173 -d dist"
+  }
+}

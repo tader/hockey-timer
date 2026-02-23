@@ -1,0 +1,17 @@
+{
+  "name": "hockey-timer",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "shared/event-schema",
+    "shared/replay-engine",
+    "backend/services/events",
+    "apps/web"
+  ],
+  "scripts": {
+    "check": "npm run --workspaces typecheck",
+    "typecheck": "npm run --workspaces typecheck",
+    "build:web": "npm run -w @hockey-timer/web build",
+    "start:events": "node backend/services/events/local-server.mjs"
+  }
+}

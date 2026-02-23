@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Hockey Timer MVP serverless backend scaffold
+
+Resources:
+  MatchEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: HockeyTimerMatchEvents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchId
+          AttributeType: S
+        - AttributeName: occurredAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchId
+          KeyType: HASH
+        - AttributeName: occurredAt
+          KeyType: RANGE
+
+  MatchProjectionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: HockeyTimerMatchProjection
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchId
+          KeyType: HASH
+
+Outputs:
+  MatchEventsTableName:
+    Value: !Ref MatchEventsTable
+  MatchProjectionTableName:
+    Value: !Ref MatchProjectionTable

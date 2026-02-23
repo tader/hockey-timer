@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@hockey-timer/event-schema": ["../event-schema/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}
