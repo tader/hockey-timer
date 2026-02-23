@@ -58,6 +58,11 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - Users can favorite/unfavorite KNHB teams for quick access.
 - Favorite teams should be persisted locally and provide a fast path to load
   upcoming matches without re-browsing clubs.
+- Teams with the same name in the same club but different type (e.g. `Veld`/`Zaal`)
+  must be treated as one logical favorite:
+  - favoriting one favorites the logical team,
+  - favorites are shown without type suffix,
+  - loading a favorite shows merged matches from both types.
 - KNHB data formatting requirements:
   - Club display uses KNHB `abbreviation` when available.
   - Team display in selection uses `${name} (${type})`.

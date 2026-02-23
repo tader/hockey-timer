@@ -26,8 +26,40 @@ struct KNHBUpcomingMatch: Identifiable, Hashable {
 
 struct KNHBFavoriteTeam: Identifiable, Codable, Hashable {
     let id: String
+    let clubId: String
+    let clubName: String?
     let name: String
-    let subtitle: String?
+    let teamIds: [String]
+
+    init(id: String, clubId: String, clubName: String?, name: String, teamIds: [String]) {
+        self.id = id
+        self.clubId = clubId
+        self.clubName = clubName
+        self.name = name
+        self.teamIds = teamIds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        clubId = (try? container.decode(String.self, forKey: .clubId)) ?? ""
+        clubName = try? container.decode(String.self, forKey: .clubName)
+        name = (try? container.decode(String.self, forKey: .name)) ?? "Team"
+        if let decodedTeamIds = try? container.decode([String].self, forKey: .teamIds),
+           decodedTeamIds.isEmpty == false {
+            teamIds = decodedTeamIds
+        } else {
+            teamIds = [id]
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case clubId
+        case clubName
+        case name
+        case teamIds
+    }
 }
 
 final class KNHBFavoriteTeamStore {
@@ -44,19 +76,30 @@ final class KNHBFavoriteTeamStore {
         return decoded
     }
 
-    func isFavorite(teamId: String) -> Bool {
-        load().contains(where: { $0.id == teamId })
+    func isFavorite(favoriteId: String) -> Bool {
+        load().contains(where: { $0.id == favoriteId })
     }
 
     func add(_ team: KNHBFavoriteTeam) {
         var teams = load()
-        guard teams.contains(where: { $0.id == team.id }) == false else { return }
-        teams.append(team)
+        if let index = teams.firstIndex(where: { $0.id == team.id }) {
+            let existing = teams[index]
+            let mergedIds = Array(Set(existing.teamIds + team.teamIds)).sorted()
+            teams[index] = KNHBFavoriteTeam(
+                id: existing.id,
+                clubId: existing.clubId,
+                clubName: existing.clubName ?? team.clubName,
+                name: existing.name,
+                teamIds: mergedIds
+            )
+        } else {
+            teams.append(team)
+        }
         save(teams)
     }
 
-    func remove(teamId: String) {
-        let teams = load().filter { $0.id != teamId }
+    func remove(favoriteId: String) {
+        let teams = load().filter { $0.id != favoriteId }
         save(teams)
     }
 
@@ -110,6 +153,39 @@ final class KNHBBrowserViewModel: ObservableObject {
         }
     }
 
+    func loadMatchesForFavorite(_ favorite: KNHBFavoriteTeam) {
+        Task {
+            await runLoading { [self] in
+                var relatedTeamIds = favorite.teamIds
+                if favorite.clubId.isEmpty == false {
+                    let clubTeams = try await self.api.fetchTeams(clubId: favorite.clubId)
+                    let normalizedFavoriteName = normalizeTeamName(favorite.name)
+                    let derivedIds = clubTeams
+                        .filter { normalizeTeamName($0.name) == normalizedFavoriteName }
+                        .map(\.id)
+                    if derivedIds.isEmpty == false {
+                        relatedTeamIds = derivedIds
+                    }
+                }
+
+                var merged: [KNHBUpcomingMatch] = []
+                for teamId in Set(relatedTeamIds) {
+                    let items = try await self.api.fetchUpcomingMatches(teamId: teamId)
+                    merged.append(contentsOf: items)
+                }
+                var byId: [String: KNHBUpcomingMatch] = [:]
+                for item in merged {
+                    byId[item.id] = item
+                }
+                self.matches = Array(byId.values)
+            }
+        }
+    }
+
+    private func normalizeTeamName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private func runLoading(_ operation: @escaping () async throws -> Void) async {
         isLoading = true
         errorMessage = nil
@@ -127,6 +203,7 @@ struct KNHBBrowserView: View {
     @StateObject private var model = KNHBBrowserViewModel()
     @State private var clubQuery = ""
     @State private var favoriteTeams: [KNHBFavoriteTeam] = []
+    @State private var activeFavoriteId: String?
 
     let onSelect: (MatchListItem) -> Void
 
@@ -139,16 +216,25 @@ struct KNHBBrowserView: View {
                 } else {
                     ForEach(favoriteTeams) { favorite in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(favorite.name + (favorite.subtitle.map { " (\($0))" } ?? ""))
+                            Text(favorite.name)
+                            if let clubName = favorite.clubName, !clubName.isEmpty {
+                                Text(clubName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             HStack {
                                 Button("Load Matches") {
-                                    model.selectedClubId = nil
-                                    model.selectedTeamId = favorite.id
+                                    model.selectedClubId = favorite.clubId.isEmpty ? nil : favorite.clubId
+                                    model.selectedTeamId = favorite.teamIds.first
                                     model.matches = []
-                                    model.loadMatches()
+                                    activeFavoriteId = favorite.id
+                                    model.loadMatchesForFavorite(favorite)
                                 }
                                 Button("Unfavorite") {
-                                    KNHBFavoriteTeamStore.shared.remove(teamId: favorite.id)
+                                    KNHBFavoriteTeamStore.shared.remove(favoriteId: favorite.id)
+                                    if activeFavoriteId == favorite.id {
+                                        activeFavoriteId = nil
+                                    }
                                     favoriteTeams = KNHBFavoriteTeamStore.shared.load()
                                 }
                             }
@@ -172,6 +258,7 @@ struct KNHBBrowserView: View {
                         ForEach(filteredClubs.prefix(25)) { club in
                             Button {
                                 model.selectedClubId = club.id
+                                activeFavoriteId = nil
                             } label: {
                                 HStack {
                                     Text(club.displayName)
@@ -185,7 +272,10 @@ struct KNHBBrowserView: View {
                         }
                     }
 
-                    Button("Load Teams") { model.loadTeams() }
+                    Button("Load Teams") {
+                        activeFavoriteId = nil
+                        model.loadTeams()
+                    }
                         .disabled(model.selectedClubId == nil)
                 }
             }
@@ -201,8 +291,13 @@ struct KNHBBrowserView: View {
                             Text(team.displayName).tag(String?.some(team.id))
                         }
                     }
+                    .onChange(of: model.selectedTeamId) { _ in
+                        if selectedTeam != nil {
+                            activeFavoriteId = nil
+                        }
+                    }
                     if let selectedTeam {
-                        Button(isFavorite(teamId: selectedTeam.id) ? "Unfavorite Team" : "Favorite Team") {
+                        Button(isFavorite(team: selectedTeam) ? "Unfavorite Team" : "Favorite Team") {
                             toggleFavorite(selectedTeam)
                         }
                     }
@@ -281,30 +376,61 @@ struct KNHBBrowserView: View {
     }
 
     private var selectedClubName: String? {
+        if let activeFavoriteId,
+           let favorite = favoriteTeams.first(where: { $0.id == activeFavoriteId }),
+           let clubName = favorite.clubName {
+            return clubName
+        }
         guard let selectedClubId = model.selectedClubId else { return nil }
         let club = model.clubs.first(where: { $0.id == selectedClubId })
         return club?.abbreviation ?? club?.name
     }
 
     private var selectedTeamName: String? {
+        if let activeFavoriteId {
+            return favoriteTeams.first(where: { $0.id == activeFavoriteId })?.name
+        }
         guard let selectedTeamId = model.selectedTeamId else { return nil }
         if let inMemoryTeam = model.teams.first(where: { $0.id == selectedTeamId }) {
             return inMemoryTeam.displayName
         }
-        return favoriteTeams.first(where: { $0.id == selectedTeamId }).map { favorite in
-            favorite.name + (favorite.subtitle.map { " (\($0))" } ?? "")
-        }
+        return nil
     }
 
-    private func isFavorite(teamId: String) -> Bool {
-        favoriteTeams.contains(where: { $0.id == teamId })
+    private func normalizeTeamName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func favoriteId(clubId: String, teamName: String) -> String {
+        "\(clubId)::\(normalizeTeamName(teamName))"
+    }
+
+    private func isFavorite(team: KNHBOption) -> Bool {
+        guard let clubId = model.selectedClubId else { return false }
+        let id = favoriteId(clubId: clubId, teamName: team.name)
+        return KNHBFavoriteTeamStore.shared.isFavorite(favoriteId: id)
     }
 
     private func toggleFavorite(_ team: KNHBOption) {
-        let favorite = KNHBFavoriteTeam(id: team.id, name: team.name, subtitle: team.subtitle)
-        if isFavorite(teamId: team.id) {
-            KNHBFavoriteTeamStore.shared.remove(teamId: team.id)
+        guard let clubId = model.selectedClubId else { return }
+        let id = favoriteId(clubId: clubId, teamName: team.name)
+        if KNHBFavoriteTeamStore.shared.isFavorite(favoriteId: id) {
+            KNHBFavoriteTeamStore.shared.remove(favoriteId: id)
+            if activeFavoriteId == id {
+                activeFavoriteId = nil
+            }
         } else {
+            let club = model.clubs.first(where: { $0.id == clubId })
+            let relatedTeamIds = model.teams
+                .filter { normalizeTeamName($0.name) == normalizeTeamName(team.name) }
+                .map(\.id)
+            let favorite = KNHBFavoriteTeam(
+                id: id,
+                clubId: clubId,
+                clubName: club?.abbreviation ?? club?.name,
+                name: team.name,
+                teamIds: relatedTeamIds.isEmpty ? [team.id] : relatedTeamIds
+            )
             KNHBFavoriteTeamStore.shared.add(favorite)
         }
         favoriteTeams = KNHBFavoriteTeamStore.shared.load()

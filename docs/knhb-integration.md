@@ -33,6 +33,9 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 - Team favorites:
   - Users can mark/unmark KNHB teams as favorites.
   - Favorites are stored locally per device for quick team re-selection.
+  - Teams in the same club with the same name but different type (`veld`/`zaal`) are grouped as one logical favorite.
+  - Favorite labels use the base team name (without type suffix).
+  - Loading a favorite fetches and merges upcoming matches for all grouped team variants.
 
 ## Date/Time Rules (Agreed)
 - KNHB datetimes are treated as UTC source values.

@@ -47,9 +47,11 @@ type KNHBMatch = {
 };
 
 type FavoriteTeam = {
-  id: string;
+  key: string;
+  clubId: string;
+  clubName?: string;
   name: string;
-  subtitle?: string;
+  teamIds: string[];
 };
 
 type UIState = {
@@ -65,6 +67,7 @@ type UIState = {
   selectedTeamId: string;
   clubQuery: string;
   favoriteTeams: FavoriteTeam[];
+  activeFavoriteKey?: string;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -86,6 +89,7 @@ const uiState: UIState = {
   selectedTeamId: "",
   clubQuery: "",
   favoriteTeams: loadFavoriteTeams(),
+  activeFavoriteKey: undefined,
 };
 
 if (uiState.matches.length === 0) {
@@ -190,11 +194,30 @@ function loadFavoriteTeams(): FavoriteTeam[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is FavoriteTeam => {
-      return !!item && typeof item === "object"
-        && typeof (item as { id?: unknown }).id === "string"
-        && typeof (item as { name?: unknown }).name === "string";
-    });
+    const normalized: FavoriteTeam[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      // Backward compatibility for older favorite payloads keyed by team id.
+      const legacyId = typeof record.id === "string" ? record.id : undefined;
+      const key = typeof record.key === "string" ? record.key : legacyId;
+      const clubId = typeof record.clubId === "string" ? record.clubId : "";
+      const name = typeof record.name === "string" ? record.name : "";
+      if (!key || !name) continue;
+      const teamIds = Array.isArray(record.teamIds)
+        ? record.teamIds.filter((value): value is string => typeof value === "string")
+        : legacyId
+          ? [legacyId]
+          : [];
+      normalized.push({
+        key,
+        clubId,
+        clubName: typeof record.clubName === "string" ? record.clubName : undefined,
+        name,
+        teamIds,
+      });
+    }
+    return normalized;
   } catch {
     return [];
   }
@@ -204,18 +227,32 @@ function saveFavoriteTeams(favoriteTeams: FavoriteTeam[]): void {
   localStorage.setItem(favoriteTeamsKey, JSON.stringify(favoriteTeams));
 }
 
-function isFavoriteTeamId(teamId: string): boolean {
-  return uiState.favoriteTeams.some((team) => team.id === teamId);
+function normalizeTeamName(name: string): string {
+  return name.trim().toLocaleLowerCase();
+}
+
+function favoriteTeamKey(clubId: string, teamName: string): string {
+  return `${clubId}::${normalizeTeamName(teamName)}`;
+}
+
+function isFavoriteTeamKey(key: string): boolean {
+  return uiState.favoriteTeams.some((team) => team.key === key);
 }
 
 function addFavoriteTeam(team: FavoriteTeam): void {
-  if (isFavoriteTeamId(team.id)) return;
+  const existing = uiState.favoriteTeams.find((current) => current.key === team.key);
+  if (existing) {
+    existing.teamIds = Array.from(new Set([...existing.teamIds, ...team.teamIds]));
+    if (!existing.clubName && team.clubName) existing.clubName = team.clubName;
+    saveFavoriteTeams(uiState.favoriteTeams);
+    return;
+  }
   uiState.favoriteTeams = [...uiState.favoriteTeams, team];
   saveFavoriteTeams(uiState.favoriteTeams);
 }
 
-function removeFavoriteTeam(teamId: string): void {
-  uiState.favoriteTeams = uiState.favoriteTeams.filter((team) => team.id !== teamId);
+function removeFavoriteTeam(favoriteKey: string): void {
+  uiState.favoriteTeams = uiState.favoriteTeams.filter((team) => team.key !== favoriteKey);
   saveFavoriteTeams(uiState.favoriteTeams);
 }
 
@@ -539,6 +576,7 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
     uiState.teams = teams;
     uiState.selectedTeamId = "";
     uiState.foundMatches = [];
+    uiState.activeFavoriteKey = undefined;
     uiState.output = `Loaded ${uiState.teams.length} teams`;
   } catch (error) {
     uiState.output = (error as Error).message;
@@ -548,77 +586,91 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
   }
 }
 
+async function fetchKNHBMatchesForTeam(teamId: string): Promise<KNHBMatch[]> {
+  const response = await fetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/upcoming`);
+  if (!response.ok) {
+    throw new Error(`KNHB matches fetch failed: ${response.status}`);
+  }
+  const payload = (await response.json()) as unknown;
+  const matches: KNHBMatch[] = [];
+  for (const item of jsonObjects(payload)) {
+    const id = firstString(item, ["id", "matchId", "wedstrijdcode", "wedstrijdnummer", "code"]);
+    if (!id) continue;
+    const displayTitle = firstString(item, ["title", "naam", "name", "omschrijving", "wedstrijd"]);
+    const parsedDisplay = parseTeamsFromDisplay(displayTitle);
+
+    const homeTeam =
+      firstString(item, [
+        "homeTeamName", "homeTeam", "teamhome", "teamHome", "thuisteam", "thuisTeam",
+        "thuisteamnaam", "home_team_name", "team_thuis", "thuis_team", "home_name", "home", "thuis",
+      ]) ??
+      extractTeamBySide(item, "home") ??
+      parsedDisplay.homeTeam ??
+      "Home";
+    const awayTeam =
+      firstString(item, [
+        "awayTeamName", "awayTeam", "teamaway", "teamAway", "uitteam", "uitTeam",
+        "uitteamnaam", "away_team_name", "team_uit", "uit_team", "away_name", "away", "uit",
+      ]) ??
+      extractTeamBySide(item, "away") ??
+      parsedDisplay.awayTeam ??
+      "Away";
+    const dateRaw = firstString(item, [
+      "date", "datum", "startDateTime", "start", "starttime", "starttijd", "aanvang", "aanvangstijd",
+      "plannedStart", "beginDateTime", "speeldatum", "datetime",
+    ]);
+    matches.push({ id, homeTeam, awayTeam, dateRaw });
+  }
+  return matches;
+}
+
+function dedupeMatches(matches: KNHBMatch[]): KNHBMatch[] {
+  const byId = new Map<string, KNHBMatch>();
+  for (const match of matches) {
+    byId.set(match.id, match);
+  }
+  return Array.from(byId.values());
+}
+
 async function loadKNHBMatches(teamId: string): Promise<void> {
   uiState.loading = true;
   render();
   try {
-    const response = await fetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/upcoming`);
-    if (!response.ok) {
-      throw new Error(`KNHB matches fetch failed: ${response.status}`);
-    }
-    const payload = (await response.json()) as unknown;
-    const matches: KNHBMatch[] = [];
-    for (const item of jsonObjects(payload)) {
-      const id = firstString(item, ["id", "matchId", "wedstrijdcode", "wedstrijdnummer", "code"]);
-      if (!id) continue;
-      const displayTitle = firstString(item, ["title", "naam", "name", "omschrijving", "wedstrijd"]);
-      const parsedDisplay = parseTeamsFromDisplay(displayTitle);
+    const matches = await fetchKNHBMatchesForTeam(teamId);
+    uiState.foundMatches = dedupeMatches(matches);
+    uiState.output = `Loaded ${uiState.foundMatches.length} upcoming matches`;
+  } catch (error) {
+    uiState.output = (error as Error).message;
+  } finally {
+    uiState.loading = false;
+    render();
+  }
+}
 
-      const homeTeam =
-        firstString(item, [
-          "homeTeamName",
-          "homeTeam",
-          "teamhome",
-          "teamHome",
-          "thuisteam",
-          "thuisTeam",
-          "thuisteamnaam",
-          "home_team_name",
-          "team_thuis",
-          "thuis_team",
-          "home_name",
-          "home",
-          "thuis",
-        ]) ??
-        extractTeamBySide(item, "home") ??
-        parsedDisplay.homeTeam ??
-        "Home";
-      const awayTeam =
-        firstString(item, [
-          "awayTeamName",
-          "awayTeam",
-          "teamaway",
-          "teamAway",
-          "uitteam",
-          "uitTeam",
-          "uitteamnaam",
-          "away_team_name",
-          "team_uit",
-          "uit_team",
-          "away_name",
-          "away",
-          "uit",
-        ]) ??
-        extractTeamBySide(item, "away") ??
-        parsedDisplay.awayTeam ??
-        "Away";
-      const dateRaw = firstString(item, [
-        "date",
-        "datum",
-        "startDateTime",
-        "start",
-        "starttime",
-        "starttijd",
-        "aanvang",
-        "aanvangstijd",
-        "plannedStart",
-        "beginDateTime",
-        "speeldatum",
-        "datetime",
-      ]);
-      matches.push({ id, homeTeam, awayTeam, dateRaw });
+async function loadKNHBMatchesForFavorite(favorite: FavoriteTeam): Promise<void> {
+  uiState.loading = true;
+  render();
+  try {
+    let relatedTeamIds = favorite.teamIds;
+    if (favorite.clubId) {
+      const response = await fetch(`${KNHB_BASE}/clubs/${encodeURIComponent(favorite.clubId)}/teams`);
+      if (response.ok) {
+        const payload = (await response.json()) as unknown;
+        const resolvedIds = jsonObjects(payload)
+          .map((item) => {
+            const id = firstString(item, ["id", "teamId", "code"]);
+            const name = firstString(item, ["name", "naam", "teamnaam"]);
+            if (!id || !name) return undefined;
+            return normalizeTeamName(name) === normalizeTeamName(favorite.name) ? id : undefined;
+          })
+          .filter((value): value is string => !!value);
+        if (resolvedIds.length > 0) {
+          relatedTeamIds = resolvedIds;
+        }
+      }
     }
-    uiState.foundMatches = matches;
+    const all = await Promise.all(relatedTeamIds.map((teamId) => fetchKNHBMatchesForTeam(teamId)));
+    uiState.foundMatches = dedupeMatches(all.flat());
     uiState.output = `Loaded ${uiState.foundMatches.length} upcoming matches`;
   } catch (error) {
     uiState.output = (error as Error).message;
@@ -637,7 +689,11 @@ function render(): void {
       ? uiState.clubs.filter((club) => club.name.toLowerCase().includes(uiState.clubQuery.trim().toLowerCase()))
       : [];
   const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
-  const selectedTeamIsFavorite = selectedTeam ? isFavoriteTeamId(selectedTeam.id) : false;
+  const selectedTeamFavoriteKey =
+    selectedTeam && uiState.selectedClubId
+      ? favoriteTeamKey(uiState.selectedClubId, selectedTeam.name)
+      : undefined;
+  const selectedTeamIsFavorite = selectedTeamFavoriteKey ? isFavoriteTeamKey(selectedTeamFavoriteKey) : false;
 
   appRoot.innerHTML = `
     <h1>Hockey Timer Web</h1>
@@ -680,10 +736,10 @@ function render(): void {
                 : uiState.favoriteTeams
                     .map((team) => `
                       <div class="found-match">
-                        <div><strong>${escapeHtml(team.name)}${team.subtitle ? ` (${escapeHtml(team.subtitle)})` : ""}</strong></div>
+                        <div><strong>${escapeHtml(team.name)}</strong>${team.clubName ? ` <span class="muted">(${escapeHtml(team.clubName)})</span>` : ""}</div>
                         <div class="row">
-                          <button class="js-load-favorite-team" data-team-id="${escapeHtml(team.id)}">Load Matches</button>
-                          <button class="js-remove-favorite-team" data-team-id="${escapeHtml(team.id)}">Unfavorite</button>
+                          <button class="js-load-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Load Matches</button>
+                          <button class="js-remove-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Unfavorite</button>
                         </div>
                       </div>
                     `)
@@ -875,6 +931,7 @@ function wireHandlers(): void {
       uiState.selectedClubId = id;
       uiState.teams = [];
       uiState.selectedTeamId = "";
+      uiState.activeFavoriteKey = undefined;
       uiState.foundMatches = [];
       render();
     });
@@ -889,6 +946,7 @@ function wireHandlers(): void {
   const teamSelect = appRoot.querySelector<HTMLSelectElement>("#teamSelect");
   teamSelect?.addEventListener("change", () => {
     uiState.selectedTeamId = teamSelect.value;
+    uiState.activeFavoriteKey = undefined;
     render();
   });
 
@@ -900,19 +958,26 @@ function wireHandlers(): void {
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-load-favorite-team").forEach((element) => {
     element.addEventListener("click", () => {
-      const teamId = element.dataset.teamId;
-      if (!teamId) return;
-      uiState.selectedTeamId = teamId;
+      const favoriteKey = element.dataset.favoriteKey;
+      if (!favoriteKey) return;
+      const favorite = uiState.favoriteTeams.find((team) => team.key === favoriteKey);
+      if (!favorite) return;
+      uiState.selectedClubId = favorite.clubId;
+      uiState.selectedTeamId = favorite.teamIds[0] ?? "";
+      uiState.activeFavoriteKey = favorite.key;
       render();
-      void loadKNHBMatches(teamId);
+      void loadKNHBMatchesForFavorite(favorite);
     });
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-remove-favorite-team").forEach((element) => {
     element.addEventListener("click", () => {
-      const teamId = element.dataset.teamId;
-      if (!teamId) return;
-      removeFavoriteTeam(teamId);
+      const favoriteKey = element.dataset.favoriteKey;
+      if (!favoriteKey) return;
+      removeFavoriteTeam(favoriteKey);
+      if (uiState.activeFavoriteKey === favoriteKey) {
+        uiState.activeFavoriteKey = undefined;
+      }
       render();
     });
   });
@@ -920,12 +985,26 @@ function wireHandlers(): void {
   const toggleFavoriteButton = appRoot.querySelector<HTMLButtonElement>("#toggleFavoriteTeam");
   toggleFavoriteButton?.addEventListener("click", () => {
     const selected = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
-    if (!selected) return;
-    if (isFavoriteTeamId(selected.id)) {
-      removeFavoriteTeam(selected.id);
+    if (!selected || !uiState.selectedClubId) return;
+    const key = favoriteTeamKey(uiState.selectedClubId, selected.name);
+    if (isFavoriteTeamKey(key)) {
+      removeFavoriteTeam(key);
+      if (uiState.activeFavoriteKey === key) {
+        uiState.activeFavoriteKey = undefined;
+      }
       uiState.output = "Team removed from favorites.";
     } else {
-      addFavoriteTeam({ id: selected.id, name: selected.name, subtitle: selected.subtitle });
+      const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
+      const relatedTeamIds = uiState.teams
+        .filter((team) => normalizeTeamName(team.name) === normalizeTeamName(selected.name))
+        .map((team) => team.id);
+      addFavoriteTeam({
+        key,
+        clubId: uiState.selectedClubId,
+        clubName: selectedClub?.abbreviation ?? selectedClub?.name,
+        name: selected.name,
+        teamIds: relatedTeamIds.length > 0 ? relatedTeamIds : [selected.id],
+      });
       uiState.output = "Team added to favorites.";
     }
     render();
@@ -940,6 +1019,7 @@ function wireHandlers(): void {
 
       const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
       const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
+      const selectedFavorite = uiState.favoriteTeams.find((team) => team.key === uiState.activeFavoriteKey);
       const metadata: MatchMetadata = {
         id: `knhb-${selected.id}`,
         source: "knhb",
@@ -948,7 +1028,7 @@ function wireHandlers(): void {
         awayTeam: selected.awayTeam,
         matchDateTime: parsePossibleDate(selected.dateRaw),
         clubName: selectedClub?.abbreviation ?? selectedClub?.name,
-        teamName: selectedTeam ? `${selectedTeam.name}${selectedTeam.subtitle ? ` (${selectedTeam.subtitle})` : ""}` : undefined,
+        teamName: selectedFavorite?.name ?? selectedTeam?.name,
         knhbMatchId: selected.id,
       };
       upsertMatch(metadata);
