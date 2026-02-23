@@ -245,10 +245,10 @@ async function refreshProjection(): Promise<void> {
     }
     uiState.projection = projection;
     uiState.output = `Last update: ${new Date().toLocaleTimeString()} (event: ${projection.lastEventAt ?? "none"})`;
-    render();
+    syncLivePanel();
   } catch (error) {
     uiState.output = (error as Error).message;
-    render();
+    syncLivePanel();
   }
 }
 
@@ -566,10 +566,10 @@ function render(): void {
               <p>${escapeHtml(matchSubtitle(selectedMatch) || "No metadata")}</p>
               <p>Source: <strong>${escapeHtml(selectedMatch.source)}</strong></p>
               ${selectedMatch.knhbMatchId ? `<p>KNHB Match ID: <strong>${escapeHtml(selectedMatch.knhbMatchId)}</strong></p>` : ""}
-              <p>Score: <strong>Home ${projection?.homeScore ?? 0} - ${projection?.awayScore ?? 0} Away</strong></p>
-              <p>State: <strong>${projection ? (projection.isEnded ? "ENDED" : projection.isRunning ? "RUNNING" : "PAUSED") : "PAUSED"}</strong></p>
-              <p>Period: <strong>P${projection?.currentPeriod ?? 1}</strong></p>
-              <p>Time: <strong class="${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</strong></p>
+              <p id="liveScore">Score: <strong>Home ${projection?.homeScore ?? 0} - ${projection?.awayScore ?? 0} Away</strong></p>
+              <p id="liveState">State: <strong>${projection ? (projection.isEnded ? "ENDED" : projection.isRunning ? "RUNNING" : "PAUSED") : "PAUSED"}</strong></p>
+              <p id="livePeriod">Period: <strong>P${projection?.currentPeriod ?? 1}</strong></p>
+              <p id="liveClock">Time: <strong class="${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</strong></p>
               <div class="row">
                 <button class="js-action" data-action="start">Start</button>
                 <button class="js-action" data-action="pause">Pause</button>
@@ -589,12 +589,43 @@ function render(): void {
             `
             : "<p>No match selected.</p>"
         }
-        <pre>${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
+        <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
       </section>
     </div>
   `;
 
   wireHandlers();
+}
+
+function syncLivePanel(): void {
+  const projection = uiState.projection;
+  const timer = projection ? periodTimerDisplay(projection) : { label: "00:00 remaining", isOverrun: false };
+
+  const score = appRoot.querySelector<HTMLElement>("#liveScore");
+  if (score) {
+    score.innerHTML = `Score: <strong>Home ${projection?.homeScore ?? 0} - ${projection?.awayScore ?? 0} Away</strong>`;
+  }
+
+  const state = appRoot.querySelector<HTMLElement>("#liveState");
+  if (state) {
+    const stateLabel = projection ? (projection.isEnded ? "ENDED" : projection.isRunning ? "RUNNING" : "PAUSED") : "PAUSED";
+    state.innerHTML = `State: <strong>${stateLabel}</strong>`;
+  }
+
+  const period = appRoot.querySelector<HTMLElement>("#livePeriod");
+  if (period) {
+    period.innerHTML = `Period: <strong>P${projection?.currentPeriod ?? 1}</strong>`;
+  }
+
+  const clock = appRoot.querySelector<HTMLElement>("#liveClock");
+  if (clock) {
+    clock.innerHTML = `Time: <strong class="${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</strong>`;
+  }
+
+  const output = appRoot.querySelector<HTMLElement>("#liveOutput");
+  if (output) {
+    output.textContent = uiState.loading ? "Loading..." : uiState.output;
+  }
 }
 
 function wireHandlers(): void {
@@ -738,7 +769,7 @@ function wireHandlers(): void {
         await refreshProjection();
       } catch (error) {
         uiState.output = (error as Error).message;
-        render();
+        syncLivePanel();
       }
     });
   });
