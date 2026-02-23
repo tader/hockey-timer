@@ -29,9 +29,11 @@
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.
 - Android delivery is intentionally paused while Apple stack is finalized.
+- Delivery rule active: implement new features in web first, then iOS/watch with parity.
 
 ## Next Priorities
-1. Add integration tests for replay, dedupe, and event ordering edge cases.
-2. Implement cloud/serverless persistence for events/projections beyond local demo server.
-3. Extend Apple gossip sync behavior and diagnostics for poor connectivity.
-4. Prepare Android backlog but keep implementation paused until Apple acceptance.
+1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.
+2. Add integration tests for replay, dedupe, and event ordering edge cases.
+3. Implement cloud/serverless persistence for events/projections beyond local demo server.
+4. Extend Apple gossip sync behavior and diagnostics for poor connectivity.
+5. Prepare Android backlog but keep implementation paused until Apple acceptance.

@@ -18,6 +18,7 @@ Documentation-first repository for a multi-platform Field Hockey Timer ecosystem
 
 ## Current Status
 MVP execution in progress with Apple + web focus; Android is temporarily paused.
+Delivery policy: implement new user features in web first, then iOS/watch with parity.
 
 ## Documentation Map
 - `docs/product-requirements.md`:

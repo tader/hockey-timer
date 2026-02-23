@@ -33,6 +33,15 @@ Note: Android implementation is currently paused until Apple apps are satisfacto
 
 ## Current Phase
 Apple + web MVP implementation and hardening:
-1. Stabilize Apple watch/iOS match flows and sync behavior.
-2. Complete serverless-ready backend APIs and integration tests.
-3. Keep Android work paused until Apple acceptance.
+1. Implement new product features in web app first.
+2. Port the same features to iOS and watch with parity before marking done.
+3. Complete serverless-ready backend APIs and integration tests.
+4. Keep Android work paused until Apple acceptance.
+
+## Delivery Order Policy
+- Web app is the reference implementation for new features.
+- Every user-facing feature must ship in this order:
+  1. Web
+  2. iOS
+  3. watchOS
+- Feature work is only complete when web and Apple apps are on par.

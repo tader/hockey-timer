@@ -34,16 +34,17 @@
 10. Implement polling sync endpoints and client poll loop contracts.
 
 ## Phase 2: MVP Apps (Apple + Web)
-1. Build watchOS timer UX for match control and scoring.
-2. Build iOS companion with richer match management.
-3. Implement gossip sync with preferred path watch↔phone, then phone↔cloud.
-4. Add offline queueing/retry and convergence diagnostics.
-5. Build web UI for match setup, live control, and history.
-6. Connect web app to cloud event/projection APIs.
-7. Add KNHB browse/select flow with cached backend integration.
-8. Add user join UX and permission management UX (RO default, RW promotion).
-9. Add optional sign-in UX with post-sign-in merge flow.
-10. End-to-end test in poor connectivity scenarios.
+1. Build web UI for match setup, live control, and history.
+2. Connect web app to cloud event/projection APIs.
+3. Implement each new feature in web first; treat web as reference behavior.
+4. Port each feature to iOS companion app with parity.
+5. Port each feature to watchOS app with parity.
+6. Implement gossip sync with preferred path watch↔phone, then phone↔cloud.
+7. Add offline queueing/retry and convergence diagnostics.
+8. Add KNHB browse/select flow with cached backend integration.
+9. Add user join UX and permission management UX (RO default, RW promotion).
+10. Add optional sign-in UX with post-sign-in merge flow.
+11. End-to-end test in poor connectivity scenarios.
 
 ## Phase 3: Android
 Status: On hold until Apple apps are satisfactory.
