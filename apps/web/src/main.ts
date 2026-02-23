@@ -6,20 +6,6 @@ const deviceIdKey = "hockey_timer_web_device_id";
 const sequenceKey = "hockey_timer_web_sequence";
 const favoriteTeamsKey = "hockey_timer_web_favorite_teams";
 
-type Projection = {
-  homeScore: number;
-  awayScore: number;
-  isRunning: boolean;
-  isEnded: boolean;
-  currentPeriod: number;
-  currentPeriodPlayedSeconds: number;
-  format: {
-    periodCount: number;
-    periodDurationSeconds: number[];
-  };
-  lastEventAt?: string;
-};
-
 type MatchEvent = {
   eventId: string;
   eventType: string;
@@ -67,7 +53,6 @@ type FavoriteTeam = {
 type UIState = {
   matches: MatchMetadata[];
   selectedMatchId: string;
-  projection: Projection | null;
   output: string;
   loading: boolean;
   clubs: KNHBOption[];
@@ -79,6 +64,15 @@ type UIState = {
   favoriteTeams: FavoriteTeam[];
   activeFavoriteKey?: string;
   events: MatchEvent[];
+  view: "list" | "match";
+  sortField: "homeTeam" | "awayTeam" | "matchDateTime" | "clubName" | "teamName" | "source" | "createdAt";
+  sortDirection: "asc" | "desc";
+  filterHome: string;
+  filterAway: string;
+  filterClub: string;
+  filterTeam: string;
+  filterSource: string;
+  liveNowMs: number;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -90,7 +84,6 @@ const appRoot: HTMLDivElement = root;
 const uiState: UIState = {
   matches: loadMatches(),
   selectedMatchId: "",
-  projection: null,
   output: "Ready.",
   loading: false,
   clubs: [],
@@ -102,6 +95,15 @@ const uiState: UIState = {
   favoriteTeams: loadFavoriteTeams(),
   activeFavoriteKey: undefined,
   events: [],
+  view: "list",
+  sortField: "matchDateTime",
+  sortDirection: "desc",
+  filterHome: "",
+  filterAway: "",
+  filterClub: "",
+  filterTeam: "",
+  filterSource: "",
+  liveNowMs: Date.now(),
 };
 
 if (uiState.matches.length === 0) {
@@ -303,15 +305,6 @@ async function pushEvent(matchId: string, eventType: string, payload: object): P
   }
 }
 
-async function fetchProjection(matchId: string): Promise<Projection> {
-  const response = await fetch(`${API_BASE}/matches/${matchId}/projection`);
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`projection fetch failed: ${response.status} ${text}`);
-  }
-  return response.json() as Promise<Projection>;
-}
-
 async function fetchEvents(matchId: string): Promise<MatchEvent[]> {
   const response = await fetch(`${API_BASE}/matches/${matchId}/events`);
   if (!response.ok) {
@@ -329,33 +322,18 @@ function formatClock(seconds: number): string {
   return `${mm}:${ss}`;
 }
 
-function periodTimerDisplay(projection: Projection): { label: string; isOverrun: boolean } {
-  const periodIndex = Math.max(0, projection.currentPeriod - 1);
-  const configured = projection.format.periodDurationSeconds[periodIndex] ?? 0;
-  const remaining = configured - projection.currentPeriodPlayedSeconds;
-
-  if (remaining >= 0) {
-    return { label: `${formatClock(remaining)} remaining`, isOverrun: false };
-  }
-
-  return { label: `+${formatClock(Math.abs(remaining))} over`, isOverrun: true };
-}
-
 async function refreshProjection(): Promise<void> {
   const selectedMatch = getSelectedMatch();
   if (!selectedMatch) return;
   const targetMatchId = selectedMatch.id;
   try {
-    const [projection, events] = await Promise.all([
-      fetchProjection(targetMatchId),
-      fetchEvents(targetMatchId),
-    ]);
+    const events = await fetchEvents(targetMatchId);
     if (uiState.selectedMatchId !== targetMatchId) {
       return;
     }
-    uiState.projection = projection;
     uiState.events = events;
-    uiState.output = `Last update: ${new Date().toLocaleTimeString()} (event: ${projection.lastEventAt ?? "none"})`;
+    const lastEventAt = events.at(-1)?.occurredAt ?? "none";
+    uiState.output = `Last update: ${new Date().toLocaleTimeString()} (event: ${lastEventAt})`;
     syncLivePanel();
   } catch (error) {
     uiState.output = (error as Error).message;
@@ -752,10 +730,157 @@ async function loadKNHBMatchesForFavorite(favorite: FavoriteTeam): Promise<void>
   }
 }
 
-function render(): void {
-  const selectedMatch = getSelectedMatch();
-  const projection = uiState.projection;
-  const timer = projection ? periodTimerDisplay(projection) : { label: "00:00 remaining", isOverrun: false };
+type LocalProjection = {
+  homeScore: number;
+  awayScore: number;
+  isRunning: boolean;
+  isEnded: boolean;
+  currentPeriod: number;
+  currentPeriodPlayedSeconds: number;
+  totalPlayedSeconds: number;
+  format: {
+    periodCount: number;
+    periodDurationSeconds: number[];
+  };
+};
+
+function filteredSortedMatches(): MatchMetadata[] {
+  const normalized = {
+    home: uiState.filterHome.trim().toLowerCase(),
+    away: uiState.filterAway.trim().toLowerCase(),
+    club: uiState.filterClub.trim().toLowerCase(),
+    team: uiState.filterTeam.trim().toLowerCase(),
+    source: uiState.filterSource.trim().toLowerCase(),
+  };
+  const filtered = uiState.matches.filter((match) => {
+    if (normalized.home && !match.homeTeam.toLowerCase().includes(normalized.home)) return false;
+    if (normalized.away && !match.awayTeam.toLowerCase().includes(normalized.away)) return false;
+    if (normalized.club && !(match.clubName ?? "").toLowerCase().includes(normalized.club)) return false;
+    if (normalized.team && !(match.teamName ?? "").toLowerCase().includes(normalized.team)) return false;
+    if (normalized.source && !match.source.toLowerCase().includes(normalized.source)) return false;
+    return true;
+  });
+  const direction = uiState.sortDirection === "asc" ? 1 : -1;
+  return filtered.sort((left, right) => {
+    const field = uiState.sortField;
+    const leftValue = field === "matchDateTime"
+      ? Date.parse(left.matchDateTime ?? left.createdAt)
+      : field === "createdAt"
+        ? Date.parse(left.createdAt)
+        : (left[field] ?? "").toString().toLowerCase();
+    const rightValue = field === "matchDateTime"
+      ? Date.parse(right.matchDateTime ?? right.createdAt)
+      : field === "createdAt"
+        ? Date.parse(right.createdAt)
+        : (right[field] ?? "").toString().toLowerCase();
+    if (leftValue < rightValue) return -1 * direction;
+    if (leftValue > rightValue) return 1 * direction;
+    return 0;
+  });
+}
+
+function replayKnownEvents(events: MatchEvent[], nowMs: number): LocalProjection {
+  const ordered = [...events].sort((a, b) => {
+    if (a.occurredAt !== b.occurredAt) return a.occurredAt.localeCompare(b.occurredAt);
+    const seqA = a.sequence ?? 0;
+    const seqB = b.sequence ?? 0;
+    if ((a.originDeviceId ?? "") !== (b.originDeviceId ?? "")) {
+      return (a.originDeviceId ?? "").localeCompare(b.originDeviceId ?? "");
+    }
+    return seqA - seqB;
+  });
+
+  let homeScore = 0;
+  let awayScore = 0;
+  let isRunning = false;
+  let isEnded = false;
+  let currentPeriod = 1;
+  let totalPlayedSeconds = 0;
+  let currentPeriodPlayedSeconds = 0;
+  let runningFromMs: number | null = null;
+  let format = { periodCount: 4, periodDurationSeconds: [1050, 1050, 1050, 1050] };
+
+  for (const event of ordered) {
+    const occurredAtMs = Date.parse(event.occurredAt);
+    if (Number.isNaN(occurredAtMs)) continue;
+    const payload = event.payload ?? {};
+
+    if (event.eventType === "score.changed") {
+      const team = payload.team;
+      const delta = Number(payload.delta ?? 0);
+      if (team === "home") homeScore += delta;
+      if (team === "away") awayScore += delta;
+    }
+
+    if (event.eventType === "match.format.updated") {
+      const payloadCount = Number(payload.periodCount ?? format.periodCount);
+      const payloadDurations = Array.isArray(payload.periodDurationSeconds) ? payload.periodDurationSeconds : format.periodDurationSeconds;
+      format = {
+        periodCount: Number.isFinite(payloadCount) ? payloadCount : format.periodCount,
+        periodDurationSeconds: payloadDurations.map((value) => Number(value)),
+      };
+    }
+
+    if (event.eventType === "match.started" || event.eventType === "match.resumed") {
+      if (isEnded) continue;
+      isRunning = true;
+      runningFromMs = occurredAtMs;
+    }
+
+    if (event.eventType === "match.paused" || event.eventType === "match.ended" || event.eventType === "period.ended") {
+      if (runningFromMs !== null) {
+        const delta = Math.max(0, Math.floor((occurredAtMs - runningFromMs) / 1000));
+        totalPlayedSeconds += delta;
+        currentPeriodPlayedSeconds += delta;
+      }
+      isRunning = false;
+      runningFromMs = null;
+    }
+
+    if (event.eventType === "period.started") {
+      currentPeriod = Number(payload.period ?? currentPeriod);
+      currentPeriodPlayedSeconds = 0;
+    }
+
+    if (event.eventType === "period.ended") {
+      currentPeriod = Math.min(format.periodCount, currentPeriod + 1);
+      currentPeriodPlayedSeconds = 0;
+    }
+
+    if (event.eventType === "match.ended") {
+      isEnded = true;
+    }
+  }
+
+  if (isRunning && runningFromMs !== null) {
+    const liveDelta = Math.max(0, Math.floor((nowMs - runningFromMs) / 1000));
+    totalPlayedSeconds += liveDelta;
+    currentPeriodPlayedSeconds += liveDelta;
+  }
+
+  return {
+    homeScore,
+    awayScore,
+    isRunning,
+    isEnded,
+    currentPeriod,
+    currentPeriodPlayedSeconds,
+    totalPlayedSeconds,
+    format,
+  };
+}
+
+function timerFromLocalProjection(local: LocalProjection): { label: string; isOverrun: boolean } {
+  const periodIndex = Math.max(0, local.currentPeriod - 1);
+  const configured = local.format.periodDurationSeconds[periodIndex] ?? local.format.periodDurationSeconds.at(-1) ?? 0;
+  const remaining = configured - local.currentPeriodPlayedSeconds;
+  if (remaining >= 0) {
+    return { label: `${formatClock(remaining)}`, isOverrun: false };
+  }
+  return { label: `+${formatClock(Math.abs(remaining))}`, isOverrun: true };
+}
+
+function renderKNHBImportSection(): string {
   const filteredClubs =
     uiState.clubQuery.trim().length > 0
       ? uiState.clubs.filter((club) => club.name.toLowerCase().includes(uiState.clubQuery.trim().toLowerCase()))
@@ -767,201 +892,327 @@ function render(): void {
       : undefined;
   const selectedTeamIsFavorite = selectedTeamFavoriteKey ? isFavoriteTeamKey(selectedTeamFavoriteKey) : false;
 
-  appRoot.innerHTML = `
-    <h1>Hockey Timer Web</h1>
-    <p>Web-first feature set: matches list, custom creation, KNHB import, and live match control.</p>
-    <div class="layout">
-      <section class="card sidebar">
-        <h2>Matches</h2>
-        <div class="match-list">
-          ${sortedMatches(uiState.matches)
-            .map((match) => {
-              const activeClass = match.id === uiState.selectedMatchId ? "active" : "";
-              return `
-                <button class="match-item ${activeClass} js-select-match" data-match-id="${escapeHtml(match.id)}">
-                  <span class="match-title">${escapeHtml(matchTitle(match))}</span>
-                  <span class="match-subtitle">${escapeHtml(matchSubtitle(match) || "No metadata")}</span>
-                </button>
-              `;
-            })
-            .join("")}
-        </div>
-
-        <h3>Create Match</h3>
-        <div class="stack">
-          <input id="createHome" type="text" placeholder="Home team" />
-          <input id="createAway" type="text" placeholder="Away team" />
-          <input id="createClub" type="text" placeholder="Club (optional)" />
-          <input id="createTeam" type="text" placeholder="Team (optional)" />
-          <label for="createDateTime">Match date/time (optional)</label>
-          <input id="createDateTime" type="datetime-local" />
-          <button id="createMatch">Create Match</button>
-        </div>
-
-        <h3>Import KNHB</h3>
-        <div class="stack">
-          <h4>Favorite Teams</h4>
-          <div class="club-results">
-            ${
-              uiState.favoriteTeams.length === 0
-                ? `<div class="muted">No favorite teams yet</div>`
-                : uiState.favoriteTeams
-                    .map((team) => `
-                      <div class="found-match">
-                        <div><strong>${escapeHtml(team.name)}</strong>${team.clubName ? ` <span class="muted">(${escapeHtml(team.clubName)})</span>` : ""}</div>
-                        <div class="row">
-                          <button class="js-load-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Load Matches</button>
-                          <button class="js-remove-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Unfavorite</button>
-                        </div>
-                      </div>
-                    `)
-                    .join("")
-            }
-          </div>
-          <button id="loadClubs">Load Clubs</button>
-          <input id="clubQuery" type="text" placeholder="Search club" value="${escapeHtml(uiState.clubQuery)}" />
-          <div class="club-results">
-            ${filteredClubs
-              .slice(0, 25)
-              .map((club) => {
-                const selected = club.id === uiState.selectedClubId ? "selected" : "";
-                const subtitle = club.subtitle ? ` (${escapeHtml(club.subtitle)})` : "";
-                const clubLabel = club.abbreviation ?? club.name;
-                return `<button class="js-select-club ${selected}" data-club-id="${escapeHtml(club.id)}">${escapeHtml(clubLabel)}${subtitle}</button>`;
-              })
-              .join("")}
-          </div>
-          <button id="loadTeams" ${uiState.selectedClubId ? "" : "disabled"}>Load Teams</button>
-          <select id="teamSelect" ${uiState.teams.length > 0 ? "" : "disabled"}>
-            <option value="">Choose team</option>
-            ${uiState.teams
-              .map((team) => {
-                const selected = team.id === uiState.selectedTeamId ? "selected" : "";
-                const subtitle = team.subtitle ? ` (${team.subtitle})` : "";
-                return `<option value="${escapeHtml(team.id)}" ${selected}>${escapeHtml(team.name + subtitle)}</option>`;
-              })
-              .join("")}
-          </select>
+  return `
+    <section class="card">
+      <h3>Import KNHB</h3>
+      <div class="stack">
+        <h4>Favorite Teams</h4>
+        <div class="club-results">
           ${
-            selectedTeam
-              ? `<button id="toggleFavoriteTeam">${selectedTeamIsFavorite ? "Unfavorite Team" : "Favorite Team"}</button>`
-              : ""
-          }
-          <button id="loadMatches" ${uiState.selectedTeamId ? "" : "disabled"}>Load Upcoming Matches</button>
-          <div class="found-matches">
-            ${uiState.foundMatches
-              .map((match) => {
-                const parsed = parsePossibleDate(match.dateRaw);
-                const label = parsed ? (formatAmsterdamDate(parsed) ?? "Date unknown") : "Date unknown";
-                return `
-                  <div class="found-match">
-                    <div><strong>${escapeHtml(match.homeTeam)} – ${escapeHtml(match.awayTeam)}</strong></div>
-                    <div class="muted">${escapeHtml(label)}</div>
-                    <button class="js-import-match" data-knhb-match-id="${escapeHtml(match.id)}">Import</button>
+            uiState.favoriteTeams.length === 0
+              ? `<div class="muted">No favorite teams yet</div>`
+              : uiState.favoriteTeams.map((team) => `
+                <div class="found-match">
+                  <div><strong>${escapeHtml(team.name)}</strong>${team.clubName ? ` <span class="muted">(${escapeHtml(team.clubName)})</span>` : ""}</div>
+                  <div class="row">
+                    <button class="js-load-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Load Matches</button>
+                    <button class="js-remove-favorite-team" data-favorite-key="${escapeHtml(team.key)}">Unfavorite</button>
                   </div>
-                `;
-              })
-              .join("")}
-          </div>
+                </div>
+              `).join("")
+          }
         </div>
-      </section>
-
-      <section class="card">
-        <h2>Live Match</h2>
-        ${
-          selectedMatch
-            ? `
-              <p>Match: <strong>${escapeHtml(selectedMatch.id)}</strong></p>
-              <p><strong>${escapeHtml(matchTitle(selectedMatch))}</strong></p>
-              <p>${escapeHtml(matchSubtitle(selectedMatch) || "No metadata")}</p>
-              <p>Source: <strong>${escapeHtml(selectedMatch.source)}</strong></p>
-              ${selectedMatch.knhbMatchId ? `<p>KNHB Match ID: <strong>${escapeHtml(selectedMatch.knhbMatchId)}</strong></p>` : ""}
-              <p id="liveScore">Score: <strong>Home ${projection?.homeScore ?? 0} - ${projection?.awayScore ?? 0} Away</strong></p>
-              <p id="liveState">State: <strong>${projection ? (projection.isEnded ? "ENDED" : projection.isRunning ? "RUNNING" : "PAUSED") : "PAUSED"}</strong></p>
-              <p id="livePeriod">Period: <strong>P${projection?.currentPeriod ?? 1}</strong></p>
-              <p id="liveClock">Time: <strong class="${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</strong></p>
-              <div class="row">
-                <button class="js-action" data-action="start">Start</button>
-                <button class="js-action" data-action="pause">Pause</button>
-                <button class="js-action" data-action="resume">Resume</button>
-                <button class="js-action" data-action="endPeriod">End Period</button>
-                <button class="js-action" data-action="endMatch">End Match</button>
+        <button id="loadClubs">Load Clubs</button>
+        <input id="clubQuery" type="text" placeholder="Search club" value="${escapeHtml(uiState.clubQuery)}" />
+        <div class="club-results">
+          ${filteredClubs.slice(0, 25).map((club) => {
+            const selected = club.id === uiState.selectedClubId ? "selected" : "";
+            const subtitle = club.subtitle ? ` (${escapeHtml(club.subtitle)})` : "";
+            const clubLabel = club.abbreviation ?? club.name;
+            return `<button class="js-select-club ${selected}" data-club-id="${escapeHtml(club.id)}">${escapeHtml(clubLabel)}${subtitle}</button>`;
+          }).join("")}
+        </div>
+        <button id="loadTeams" ${uiState.selectedClubId ? "" : "disabled"}>Load Teams</button>
+        <select id="teamSelect" ${uiState.teams.length > 0 ? "" : "disabled"}>
+          <option value="">Choose team</option>
+          ${uiState.teams.map((team) => {
+            const selected = team.id === uiState.selectedTeamId ? "selected" : "";
+            const subtitle = team.subtitle ? ` (${team.subtitle})` : "";
+            return `<option value="${escapeHtml(team.id)}" ${selected}>${escapeHtml(team.name + subtitle)}</option>`;
+          }).join("")}
+        </select>
+        ${selectedTeam ? `<button id="toggleFavoriteTeam">${selectedTeamIsFavorite ? "Unfavorite Team" : "Favorite Team"}</button>` : ""}
+        <button id="loadMatches" ${uiState.selectedTeamId ? "" : "disabled"}>Load Upcoming Matches</button>
+        <div class="found-matches">
+          ${uiState.foundMatches.map((match) => {
+            const parsed = parsePossibleDate(match.dateRaw);
+            const label = parsed ? (formatAmsterdamDate(parsed) ?? "Date unknown") : "Date unknown";
+            return `
+              <div class="found-match">
+                <div><strong>${escapeHtml(match.homeTeam)} – ${escapeHtml(match.awayTeam)}</strong></div>
+                <div class="muted">${escapeHtml(label)}</div>
+                <button class="js-import-match" data-knhb-match-id="${escapeHtml(match.id)}">Import</button>
               </div>
-              <div class="row">
-                <button class="js-action" data-action="homePlus">+ Home</button>
-                <button class="js-action" data-action="awayPlus">+ Away</button>
-                <button class="js-action" data-action="homeMinus">- Home</button>
-                <button class="js-action" data-action="awayMinus">- Away</button>
-              </div>
-              <div class="row">
-                <button id="poll">Poll Now</button>
-              </div>
-              <h3>Events</h3>
-              <div id="liveEvents" class="events-list">${renderEventsList()}</div>
-            `
-            : "<p>No match selected.</p>"
-        }
-        <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
-      </section>
-    </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    </section>
   `;
+}
 
+function renderListView(): string {
+  const rows = filteredSortedMatches();
+  return `
+    <section class="card">
+      <div class="title-row">
+        <h2>Matches</h2>
+        <span class="muted">${rows.length} shown</span>
+      </div>
+      <div class="filters-grid">
+        <input id="filterHome" placeholder="Filter home" value="${escapeHtml(uiState.filterHome)}" />
+        <input id="filterAway" placeholder="Filter away" value="${escapeHtml(uiState.filterAway)}" />
+        <input id="filterClub" placeholder="Filter club" value="${escapeHtml(uiState.filterClub)}" />
+        <input id="filterTeam" placeholder="Filter team" value="${escapeHtml(uiState.filterTeam)}" />
+        <input id="filterSource" placeholder="Filter source" value="${escapeHtml(uiState.filterSource)}" />
+      </div>
+      <div class="table-wrap">
+        <table class="matches-table">
+          <thead>
+            <tr>
+              <th><button class="table-sort js-sort" data-field="homeTeam">Home</button></th>
+              <th><button class="table-sort js-sort" data-field="awayTeam">Away</button></th>
+              <th><button class="table-sort js-sort" data-field="matchDateTime">Date</button></th>
+              <th><button class="table-sort js-sort" data-field="clubName">Club</button></th>
+              <th><button class="table-sort js-sort" data-field="teamName">Team</button></th>
+              <th><button class="table-sort js-sort" data-field="source">Source</button></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((match) => `
+              <tr class="js-open-match" data-match-id="${escapeHtml(match.id)}">
+                <td>${escapeHtml(match.homeTeam)}</td>
+                <td>${escapeHtml(match.awayTeam)}</td>
+                <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
+                <td>${escapeHtml(match.clubName ?? "")}</td>
+                <td>${escapeHtml(match.teamName ?? "")}</td>
+                <td>${escapeHtml(match.source)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h3>Create Match</h3>
+      <div class="stack">
+        <input id="createHome" type="text" placeholder="Home team" />
+        <input id="createAway" type="text" placeholder="Away team" />
+        <input id="createClub" type="text" placeholder="Club (optional)" />
+        <input id="createTeam" type="text" placeholder="Team (optional)" />
+        <label for="createDateTime">Match date/time (optional)</label>
+        <input id="createDateTime" type="datetime-local" />
+        <button id="createMatch">Create Match</button>
+      </div>
+    </section>
+    ${renderKNHBImportSection()}
+  `;
+}
+
+function renderMatchView(match: MatchMetadata): string {
+  const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
+  const timer = timerFromLocalProjection(local);
+  const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  return `
+    <section class="card">
+      <div class="title-row">
+        <button id="backToList" class="ghost">Back To Matches (Esc)</button>
+        <span class="muted">${escapeHtml(match.id)}</span>
+      </div>
+      <h2>${escapeHtml(matchTitle(match))}</h2>
+      <p class="muted">${escapeHtml(matchSubtitle(match) || "No metadata")}</p>
+      <div class="scoreboard">
+        <div class="team-score">
+          <div class="team-label">Home</div>
+          <div id="scoreHome" class="score-number">${local.homeScore}</div>
+        </div>
+        <div class="clock-panel">
+          <div id="liveClock" class="clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
+          <div id="liveState" class="state-pill">${stateLabel}</div>
+          <div id="livePeriod" class="muted">Period ${local.currentPeriod}</div>
+        </div>
+        <div class="team-score">
+          <div class="team-label">Away</div>
+          <div id="scoreAway" class="score-number">${local.awayScore}</div>
+        </div>
+      </div>
+      <div class="control-grid">
+        <button class="js-action" data-action="start">Start <kbd>S</kbd></button>
+        <button class="js-action" data-action="pause">Pause <kbd>Space</kbd></button>
+        <button class="js-action" data-action="resume">Resume <kbd>Space</kbd></button>
+        <button class="js-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+        <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
+        <button class="js-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
+        <button class="js-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
+        <button class="js-action" data-action="homeMinus">Home -1 <kbd>Shift+H</kbd></button>
+        <button class="js-action" data-action="awayMinus">Away -1 <kbd>Shift+A</kbd></button>
+        <button id="poll">Refresh <kbd>R</kbd></button>
+      </div>
+      <h3>Events</h3>
+      <div id="liveEvents" class="events-list">${renderEventsList()}</div>
+      <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
+    </section>
+  `;
+}
+
+function render(): void {
+  const selectedMatch = getSelectedMatch();
+  const body = uiState.view === "match" && selectedMatch
+    ? renderMatchView(selectedMatch)
+    : renderListView();
+
+  appRoot.innerHTML = `
+    <h1>Hockey Timer</h1>
+    <p class="muted">List-first workflow with full keyboard control in match view.</p>
+    ${body}
+  `;
   wireHandlers();
 }
 
 function syncLivePanel(): void {
-  const projection = uiState.projection;
-  const timer = projection ? periodTimerDisplay(projection) : { label: "00:00 remaining", isOverrun: false };
-
-  const score = appRoot.querySelector<HTMLElement>("#liveScore");
-  if (score) {
-    score.innerHTML = `Score: <strong>Home ${projection?.homeScore ?? 0} - ${projection?.awayScore ?? 0} Away</strong>`;
-  }
-
+  const selectedMatch = getSelectedMatch();
+  if (!selectedMatch || uiState.view !== "match") return;
+  const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
+  const timer = timerFromLocalProjection(local);
+  const scoreHome = appRoot.querySelector<HTMLElement>("#scoreHome");
+  const scoreAway = appRoot.querySelector<HTMLElement>("#scoreAway");
   const state = appRoot.querySelector<HTMLElement>("#liveState");
-  if (state) {
-    const stateLabel = projection ? (projection.isEnded ? "ENDED" : projection.isRunning ? "RUNNING" : "PAUSED") : "PAUSED";
-    state.innerHTML = `State: <strong>${stateLabel}</strong>`;
-  }
-
   const period = appRoot.querySelector<HTMLElement>("#livePeriod");
-  if (period) {
-    period.innerHTML = `Period: <strong>P${projection?.currentPeriod ?? 1}</strong>`;
-  }
-
   const clock = appRoot.querySelector<HTMLElement>("#liveClock");
-  if (clock) {
-    clock.innerHTML = `Time: <strong class="${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</strong>`;
-  }
-
   const output = appRoot.querySelector<HTMLElement>("#liveOutput");
-  if (output) {
-    output.textContent = uiState.loading ? "Loading..." : uiState.output;
-  }
-
   const events = appRoot.querySelector<HTMLElement>("#liveEvents");
-  if (events) {
-    events.innerHTML = renderEventsList();
+
+  if (scoreHome) scoreHome.textContent = String(local.homeScore);
+  if (scoreAway) scoreAway.textContent = String(local.awayScore);
+  if (state) state.textContent = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  if (period) period.textContent = `Period ${local.currentPeriod}`;
+  if (clock) {
+    clock.textContent = timer.label;
+    clock.classList.toggle("overrun", timer.isOverrun);
+  }
+  if (output) output.textContent = uiState.loading ? "Loading..." : uiState.output;
+  if (events) events.innerHTML = renderEventsList();
+}
+
+async function triggerAction(action: string): Promise<void> {
+  const selectedMatch = getSelectedMatch();
+  if (!selectedMatch) return;
+  const actionToEvent: Record<string, { eventType: string; payload: Record<string, string | number> | object }> = {
+    start: { eventType: "match.started", payload: {} },
+    pause: { eventType: "match.paused", payload: {} },
+    resume: { eventType: "match.resumed", payload: {} },
+    endPeriod: { eventType: "period.ended", payload: {} },
+    endMatch: { eventType: "match.ended", payload: {} },
+    homePlus: { eventType: "score.changed", payload: { team: "home", delta: 1, reason: "goal" } },
+    awayPlus: { eventType: "score.changed", payload: { team: "away", delta: 1, reason: "goal" } },
+    homeMinus: { eventType: "score.changed", payload: { team: "home", delta: -1, reason: "correction" } },
+    awayMinus: { eventType: "score.changed", payload: { team: "away", delta: -1, reason: "correction" } },
+  };
+  const mapped = actionToEvent[action];
+  if (!mapped) return;
+  try {
+    await pushEvent(selectedMatch.id, mapped.eventType, mapped.payload);
+    await refreshProjection();
+  } catch (error) {
+    uiState.output = (error as Error).message;
+    syncLivePanel();
   }
 }
 
+function applySort(field: UIState["sortField"]): void {
+  if (uiState.sortField === field) {
+    uiState.sortDirection = uiState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    uiState.sortField = field;
+    uiState.sortDirection = field === "matchDateTime" || field === "createdAt" ? "desc" : "asc";
+  }
+}
+
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+}
+
+function initKeyboardShortcuts(): void {
+  if ((window as { __hockeyShortcutsBound?: boolean }).__hockeyShortcutsBound) return;
+  (window as { __hockeyShortcutsBound?: boolean }).__hockeyShortcutsBound = true;
+  document.addEventListener("keydown", (event) => {
+    if (uiState.view !== "match") return;
+    if (isEditable(event.target)) return;
+    if (event.key === "Escape") {
+      uiState.view = "list";
+      render();
+      return;
+    }
+    if (event.key.toLowerCase() === "r") {
+      event.preventDefault();
+      void refreshProjection();
+      return;
+    }
+    if (event.key === " ") {
+      event.preventDefault();
+      const local = replayKnownEvents(uiState.events, Date.now());
+      const hasStarted = uiState.events.some((item) => item.eventType === "match.started");
+      if (local.isRunning) {
+        void triggerAction("pause");
+      } else if (hasStarted) {
+        void triggerAction("resume");
+      } else {
+        void triggerAction("start");
+      }
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (key === "e") void triggerAction("endPeriod");
+    if (key === "m") void triggerAction("endMatch");
+    if (key === "h") void triggerAction(event.shiftKey ? "homeMinus" : "homePlus");
+    if (key === "a") void triggerAction(event.shiftKey ? "awayMinus" : "awayPlus");
+  });
+}
+
 function wireHandlers(): void {
-  appRoot.querySelectorAll<HTMLButtonElement>(".js-select-match").forEach((element) => {
+  appRoot.querySelectorAll<HTMLElement>(".js-open-match").forEach((element) => {
     element.addEventListener("click", () => {
       const id = element.dataset.matchId;
       if (!id) return;
       uiState.selectedMatchId = id;
       localStorage.setItem(selectedMatchIdKey, id);
-      uiState.projection = null;
       uiState.events = [];
-      uiState.output = "Match selected.";
+      uiState.view = "match";
       render();
       void refreshProjection();
     });
   });
 
-  const createButton = appRoot.querySelector<HTMLButtonElement>("#createMatch");
-  createButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#backToList")?.addEventListener("click", () => {
+    uiState.view = "list";
+    render();
+  });
+
+  appRoot.querySelectorAll<HTMLButtonElement>(".js-sort").forEach((element) => {
+    element.addEventListener("click", () => {
+      const field = element.dataset.field as UIState["sortField"] | undefined;
+      if (!field) return;
+      applySort(field);
+      render();
+    });
+  });
+
+  for (const [id, key] of [
+    ["filterHome", "filterHome"],
+    ["filterAway", "filterAway"],
+    ["filterClub", "filterClub"],
+    ["filterTeam", "filterTeam"],
+    ["filterSource", "filterSource"],
+  ] as const) {
+    const input = appRoot.querySelector<HTMLInputElement>(`#${id}`);
+    input?.addEventListener("input", () => {
+      uiState[key] = input.value;
+      render();
+    });
+  }
+
+  appRoot.querySelector<HTMLButtonElement>("#createMatch")?.addEventListener("click", () => {
     const homeTeam = (appRoot.querySelector<HTMLInputElement>("#createHome")?.value ?? "").trim() || "Home";
     const awayTeam = (appRoot.querySelector<HTMLInputElement>("#createAway")?.value ?? "").trim() || "Away";
     const clubName = (appRoot.querySelector<HTMLInputElement>("#createClub")?.value ?? "").trim();
@@ -979,28 +1230,22 @@ function wireHandlers(): void {
     };
     upsertMatch(metadata);
     uiState.selectedMatchId = metadata.id;
+    uiState.view = "match";
     localStorage.setItem(selectedMatchIdKey, metadata.id);
-    uiState.projection = null;
-    uiState.output = "Custom match created.";
+    uiState.events = [];
     render();
     void refreshProjection();
   });
 
   const clubQueryInput = appRoot.querySelector<HTMLInputElement>("#clubQuery");
   clubQueryInput?.addEventListener("input", () => {
-    const selectionStart = clubQueryInput.selectionStart ?? clubQueryInput.value.length;
-    const selectionEnd = clubQueryInput.selectionEnd ?? clubQueryInput.value.length;
     uiState.clubQuery = clubQueryInput.value;
     render();
     const replacement = appRoot.querySelector<HTMLInputElement>("#clubQuery");
-    if (replacement) {
-      replacement.focus();
-      replacement.setSelectionRange(selectionStart, selectionEnd);
-    }
+    replacement?.focus();
   });
 
-  const loadClubsButton = appRoot.querySelector<HTMLButtonElement>("#loadClubs");
-  loadClubsButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#loadClubs")?.addEventListener("click", () => {
     void loadKNHBClubs();
   });
 
@@ -1017,8 +1262,7 @@ function wireHandlers(): void {
     });
   });
 
-  const loadTeamsButton = appRoot.querySelector<HTMLButtonElement>("#loadTeams");
-  loadTeamsButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#loadTeams")?.addEventListener("click", () => {
     if (!uiState.selectedClubId) return;
     void loadKNHBTeams(uiState.selectedClubId);
   });
@@ -1030,8 +1274,7 @@ function wireHandlers(): void {
     render();
   });
 
-  const loadMatchesButton = appRoot.querySelector<HTMLButtonElement>("#loadMatches");
-  loadMatchesButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#loadMatches")?.addEventListener("click", () => {
     if (!uiState.selectedTeamId) return;
     void loadKNHBMatches(uiState.selectedTeamId);
   });
@@ -1055,23 +1298,18 @@ function wireHandlers(): void {
       const favoriteKey = element.dataset.favoriteKey;
       if (!favoriteKey) return;
       removeFavoriteTeam(favoriteKey);
-      if (uiState.activeFavoriteKey === favoriteKey) {
-        uiState.activeFavoriteKey = undefined;
-      }
+      if (uiState.activeFavoriteKey === favoriteKey) uiState.activeFavoriteKey = undefined;
       render();
     });
   });
 
-  const toggleFavoriteButton = appRoot.querySelector<HTMLButtonElement>("#toggleFavoriteTeam");
-  toggleFavoriteButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#toggleFavoriteTeam")?.addEventListener("click", () => {
     const selected = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
     if (!selected || !uiState.selectedClubId) return;
     const key = favoriteTeamKey(uiState.selectedClubId, selected.name);
     if (isFavoriteTeamKey(key)) {
       removeFavoriteTeam(key);
-      if (uiState.activeFavoriteKey === key) {
-        uiState.activeFavoriteKey = undefined;
-      }
+      if (uiState.activeFavoriteKey === key) uiState.activeFavoriteKey = undefined;
       uiState.output = "Team removed from favorites.";
     } else {
       const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
@@ -1096,7 +1334,6 @@ function wireHandlers(): void {
       if (!matchId) return;
       const selected = uiState.foundMatches.find((match) => match.id === matchId);
       if (!selected) return;
-
       const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
       const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
       const selectedFavorite = uiState.favoriteTeams.find((team) => team.key === uiState.activeFavoriteKey);
@@ -1113,52 +1350,34 @@ function wireHandlers(): void {
       };
       upsertMatch(metadata);
       uiState.selectedMatchId = metadata.id;
+      uiState.view = "match";
       localStorage.setItem(selectedMatchIdKey, metadata.id);
-      uiState.projection = null;
-      uiState.output = "KNHB match imported.";
+      uiState.events = [];
       render();
       void refreshProjection();
     });
   });
 
-  const pollButton = appRoot.querySelector<HTMLButtonElement>("#poll");
-  pollButton?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#poll")?.addEventListener("click", () => {
     void refreshProjection();
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-action").forEach((element) => {
-    element.addEventListener("click", async () => {
+    element.addEventListener("click", () => {
       const action = element.dataset.action;
-      const selectedMatch = getSelectedMatch();
-      if (!action || !selectedMatch) return;
-
-      const actionToEvent: Record<string, { eventType: string; payload: Record<string, string | number> | object }> = {
-        start: { eventType: "match.started", payload: {} },
-        pause: { eventType: "match.paused", payload: {} },
-        resume: { eventType: "match.resumed", payload: {} },
-        endPeriod: { eventType: "period.ended", payload: {} },
-        endMatch: { eventType: "match.ended", payload: {} },
-        homePlus: { eventType: "score.changed", payload: { team: "home", delta: 1, reason: "goal" } },
-        awayPlus: { eventType: "score.changed", payload: { team: "away", delta: 1, reason: "goal" } },
-        homeMinus: { eventType: "score.changed", payload: { team: "home", delta: -1, reason: "correction" } },
-        awayMinus: { eventType: "score.changed", payload: { team: "away", delta: -1, reason: "correction" } },
-      };
-
-      const mapped = actionToEvent[action];
-      if (!mapped) return;
-      try {
-        await pushEvent(selectedMatch.id, mapped.eventType, mapped.payload);
-        await refreshProjection();
-      } catch (error) {
-        uiState.output = (error as Error).message;
-        syncLivePanel();
-      }
+      if (!action) return;
+      void triggerAction(action);
     });
   });
 }
 
 render();
+initKeyboardShortcuts();
 void refreshProjection();
+setInterval(() => {
+  uiState.liveNowMs = Date.now();
+  syncLivePanel();
+}, 1000);
 setInterval(() => {
   void refreshProjection();
 }, 3000);
