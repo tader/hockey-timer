@@ -65,6 +65,9 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
   - Configurable API base setting (iOS + watch).
   - Durable offline event queue with retry on reconnect.
   - iOS KNHB import flow (club -> team -> upcoming match).
+  - iOS custom match creation + metadata editing.
+  - iOS match list filters (home/away/club/team) + newest-first sorting.
+  - KNHB metadata includes `homeTeam`, `awayTeam`, and `knhbMatchId`.
 
 ## Validation
 - Typecheck passes for all TypeScript workspaces:

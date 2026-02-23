@@ -5,6 +5,12 @@ import Combine
 struct KNHBOption: Identifiable, Hashable {
     let id: String
     let name: String
+    let subtitle: String?
+
+    var displayName: String {
+        guard let subtitle, !subtitle.isEmpty else { return name }
+        return "\(name) (\(subtitle))"
+    }
 }
 
 struct KNHBUpcomingMatch: Identifiable, Hashable {
@@ -95,7 +101,7 @@ struct KNHBBrowserView: View {
                                 model.selectedClubId = club.id
                             } label: {
                                 HStack {
-                                    Text(club.name)
+                                    Text(club.displayName)
                                     Spacer()
                                     if model.selectedClubId == club.id {
                                         Image(systemName: "checkmark.circle.fill")
@@ -119,7 +125,7 @@ struct KNHBBrowserView: View {
                     Picker("Select Team", selection: $model.selectedTeamId) {
                         Text("Choose team").tag(String?.none)
                         ForEach(model.teams) { team in
-                            Text(team.name).tag(String?.some(team.id))
+                            Text(team.displayName).tag(String?.some(team.id))
                         }
                     }
                     Button("Load Upcoming Matches") { model.loadMatches() }
@@ -139,7 +145,10 @@ struct KNHBBrowserView: View {
                                 source: "knhb",
                                 matchDateTime: parseKNHBDate(match.subtitle),
                                 homeTeam: splitTeams(from: match.title).home,
-                                awayTeam: splitTeams(from: match.title).away
+                                awayTeam: splitTeams(from: match.title).away,
+                                clubName: selectedClubName,
+                                teamName: selectedTeamName,
+                                knhbMatchId: match.id
                             )
                             onSelect(item)
                             dismiss()
@@ -187,6 +196,16 @@ struct KNHBBrowserView: View {
         return model.clubs.filter { $0.name.localizedCaseInsensitiveContains(normalized) }
     }
 
+    private var selectedClubName: String? {
+        guard let selectedClubId = model.selectedClubId else { return nil }
+        return model.clubs.first(where: { $0.id == selectedClubId })?.name
+    }
+
+    private var selectedTeamName: String? {
+        guard let selectedTeamId = model.selectedTeamId else { return nil }
+        return model.teams.first(where: { $0.id == selectedTeamId })?.displayName
+    }
+
     private func splitTeams(from title: String) -> (home: String, away: String) {
         let parts = title.components(separatedBy: " vs ")
         if parts.count == 2 {
@@ -216,10 +235,31 @@ struct KNHBApiClient {
     }
 
     func fetchTeams(clubId: String) async throws -> [KNHBOption] {
-        try await fetchOptions(
-            urlString: "\(base)/clubs/\(clubId)/teams",
-            preferredNameKeys: ["name", "naam", "teamnaam"]
-        )
+        guard let url = URL(string: "\(base)/clubs/\(clubId)/teams") else {
+            throw NSError(domain: "KNHBApiClient", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid KNHB URL"])
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NSError(domain: "KNHBApiClient", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to load KNHB data"])
+        }
+
+        return try jsonObjects(from: data).compactMap { dict in
+            guard let id = stringValue(in: dict, keys: ["id", "teamId", "code"]) else {
+                return nil
+            }
+            guard let name = stringValue(in: dict, keys: ["name", "naam", "teamnaam"]) else {
+                return nil
+            }
+
+            let competition = stringValue(in: dict, keys: ["competitie", "competition", "competitionName", "discipline", "soort"])
+            let season = stringValue(in: dict, keys: ["seizoen", "season"])
+            let subtitle = [competition, season].compactMap { value in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }.joined(separator: " • ")
+
+            return KNHBOption(id: id, name: name, subtitle: subtitle.isEmpty ? nil : subtitle)
+        }
     }
 
     func fetchUpcomingMatches(teamId: String) async throws -> [KNHBUpcomingMatch] {
@@ -262,7 +302,7 @@ struct KNHBApiClient {
             guard let name = stringValue(in: dict, keys: preferredNameKeys) else {
                 return nil
             }
-            return KNHBOption(id: id, name: name)
+            return KNHBOption(id: id, name: name, subtitle: nil)
         }
     }
 

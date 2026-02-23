@@ -45,6 +45,27 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - `https://publicaties.hockeyweerelt.nl/mc/clubs`
   - `https://publicaties.hockeyweerelt.nl/mc/clubs/${CLUB_ID}/teams`
   - `https://publicaties.hockeyweerelt.nl/mc/teams/{teamId}/matches/upcoming`
+- Store KNHB match linkage in match metadata (`knhbMatchId`) when imported.
+- Persist match metadata fields for every match:
+  - `homeTeam`
+  - `awayTeam`
+  - optional `matchDateTime`
+  - optional `clubName`
+  - optional `teamName`
+  - optional `knhbMatchId`
+- KNHB team selection must disambiguate teams that share the same name across
+  competitions (e.g., `zaal` vs `veld`) by showing competition context.
+
+## Match List & Metadata UX
+- Users can create custom matches.
+- Users can edit match metadata after creation/import.
+- Match list should show match date/time.
+- Match list should sort newest-first (based on match date/time, fallback to creation time).
+- Match list should support filtering by:
+  - home team
+  - away team
+  - club
+  - team
 
 ## Web/Cloud Direction
 - Web stack backed by AWS serverless:

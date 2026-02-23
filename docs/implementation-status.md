@@ -21,6 +21,10 @@
 - Apple API base URL is runtime configurable in iOS + watch settings.
 - Apple shared sync now persists a durable offline event queue and retries flush on reconnect paths.
 - iOS app includes KNHB club/team/upcoming-match browse + import flow for match prefill.
+- iOS supports custom match creation and metadata editing.
+- iOS match list now shows metadata, supports newest-first sorting, and filter inputs (home/away/club/team).
+- Imported KNHB matches now persist `knhbMatchId` in local metadata.
+- KNHB team picker now includes competition context in labels to disambiguate duplicate team names.
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.

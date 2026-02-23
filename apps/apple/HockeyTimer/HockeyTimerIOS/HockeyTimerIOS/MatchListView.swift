@@ -9,6 +9,7 @@ struct MatchListItem: Identifiable, Codable, Hashable {
     let awayTeam: String
     let clubName: String?
     let teamName: String?
+    let knhbMatchId: String?
 
     var title: String {
         "\(homeTeam) vs \(awayTeam)"
@@ -39,7 +40,8 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         homeTeam: String,
         awayTeam: String,
         clubName: String? = nil,
-        teamName: String? = nil
+        teamName: String? = nil,
+        knhbMatchId: String? = nil
     ) {
         self.id = id
         self.source = source
@@ -49,6 +51,7 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         self.awayTeam = awayTeam
         self.clubName = clubName
         self.teamName = teamName
+        self.knhbMatchId = knhbMatchId
     }
 
     init(from decoder: Decoder) throws {
@@ -59,6 +62,7 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         matchDateTime = try? container.decode(Date.self, forKey: .matchDateTime)
         clubName = try? container.decode(String.self, forKey: .clubName)
         teamName = try? container.decode(String.self, forKey: .teamName)
+        knhbMatchId = try? container.decode(String.self, forKey: .knhbMatchId)
 
         if let home = try? container.decode(String.self, forKey: .homeTeam),
            let away = try? container.decode(String.self, forKey: .awayTeam) {
@@ -88,6 +92,7 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         case awayTeam
         case clubName
         case teamName
+        case knhbMatchId
     }
 
     private enum LegacyCodingKeys: String, CodingKey {
@@ -291,7 +296,8 @@ struct MatchMetadataEditorView: View {
                         homeTeam: homeTeam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Home" : homeTeam.trimmingCharacters(in: .whitespacesAndNewlines),
                         awayTeam: awayTeam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Away" : awayTeam.trimmingCharacters(in: .whitespacesAndNewlines),
                         clubName: clubName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : clubName.trimmingCharacters(in: .whitespacesAndNewlines),
-                        teamName: teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : teamName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        teamName: teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : teamName.trimmingCharacters(in: .whitespacesAndNewlines),
+                        knhbMatchId: match.knhbMatchId
                     )
                     onSave(updated)
                     dismiss()
