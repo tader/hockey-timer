@@ -32,6 +32,7 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 - Match metadata persistence:
   - Persist `homeTeam`, `awayTeam`, and `knhbMatchId` for imported matches.
   - Persist `Location` from `match.location.description` when present.
+  - Persist `knhbSourceTeamId` to support direct metadata refresh of an imported match.
 - Team favorites:
   - Users can mark/unmark KNHB teams as favorites.
   - Favorites are stored locally per device for quick team re-selection.
@@ -57,6 +58,13 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 - If KNHB unavailable:
   - allow manual match setup/editing
   - keep timer functionality independent of KNHB access
+
+## Development Refresh Flow
+- Web match view includes `Refresh KNHB Data` for imported matches.
+- The refresh action:
+  - requires both `knhbMatchId` and `knhbSourceTeamId`,
+  - fetches both `upcoming` and `official` matches for that source team,
+  - re-applies metadata for the matching KNHB match id.
 
 ## Testing Coverage
 - Web KNHB parsing and mapping logic has unit tests that cover:

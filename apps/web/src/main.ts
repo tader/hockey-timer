@@ -32,6 +32,7 @@ type MatchMetadata = {
   locationClubName?: string;
   fieldName?: string;
   knhbMatchId?: string;
+  knhbSourceTeamId?: string;
 };
 
 type KNHBOption = {
@@ -48,6 +49,7 @@ type KNHBMatch = {
   dateRaw?: string;
   locationClubName?: string;
   fieldName?: string;
+  sourceTeamIds?: string[];
 };
 
 type FavoriteTeam = {
@@ -230,6 +232,11 @@ function loadMatches(): MatchMetadata[] {
             ? raw.teamName
             : undefined,
         knhbMatchId: typeof raw.knhbMatchId === "string" ? raw.knhbMatchId : undefined,
+        knhbSourceTeamId: typeof raw.knhbSourceTeamId === "string"
+          ? raw.knhbSourceTeamId
+          : typeof raw.knhbTeamId === "string"
+            ? raw.knhbTeamId
+            : undefined,
       });
     }
     return normalized;
@@ -336,6 +343,7 @@ function createQuickMatch(): MatchMetadata {
 
 function applyImportedMatch(selected: KNHBMatch): void {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
+  const importSourceTeamId = selected.sourceTeamIds?.[0] ?? uiState.selectedTeamId ?? undefined;
   const base = toImportedMatchMetadata(selected, {
     nowIso: new Date().toISOString(),
     parsedDateIso: parsePossibleDate(selected.dateRaw),
@@ -354,11 +362,12 @@ function applyImportedMatch(selected: KNHBMatch): void {
         locationClubName: base.locationClubName,
         fieldName: base.fieldName,
         knhbMatchId: base.knhbMatchId,
+        knhbSourceTeamId: importSourceTeamId ?? existing.knhbSourceTeamId,
       });
       uiState.selectedMatchId = existing.id;
     }
   } else {
-    upsertMatch(base);
+    upsertMatch({ ...base, knhbSourceTeamId: importSourceTeamId });
     uiState.selectedMatchId = base.id;
   }
 
@@ -624,17 +633,17 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
   }
 }
 
-async function fetchKNHBMatchesForTeam(teamId: string): Promise<KNHBMatch[]> {
-  const response = await fetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/upcoming`);
+async function fetchKNHBMatchesForTeam(teamId: string, kind: "upcoming" | "official" = "upcoming"): Promise<KNHBMatch[]> {
+  const response = await fetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/${kind}`);
   if (!response.ok) {
-    throw new Error(`KNHB matches fetch failed: ${response.status}`);
+    throw new Error(`KNHB ${kind} matches fetch failed: ${response.status}`);
   }
   const payload = (await response.json()) as unknown;
   const matches: KNHBMatch[] = [];
   for (const item of jsonObjects(payload)) {
     const parsed = parseKNHBMatchItem(item);
     if (!parsed) continue;
-    matches.push(parsed);
+    matches.push({ ...parsed, sourceTeamIds: [teamId] });
   }
   return matches;
 }
@@ -642,7 +651,16 @@ async function fetchKNHBMatchesForTeam(teamId: string): Promise<KNHBMatch[]> {
 function dedupeMatches(matches: KNHBMatch[]): KNHBMatch[] {
   const byId = new Map<string, KNHBMatch>();
   for (const match of matches) {
-    byId.set(match.id, match);
+    const existing = byId.get(match.id);
+    if (!existing) {
+      byId.set(match.id, match);
+      continue;
+    }
+    byId.set(match.id, {
+      ...existing,
+      ...match,
+      sourceTeamIds: Array.from(new Set([...(existing.sourceTeamIds ?? []), ...(match.sourceTeamIds ?? [])])),
+    });
   }
   return Array.from(byId.values());
 }
@@ -651,7 +669,7 @@ async function loadKNHBMatches(teamId: string): Promise<void> {
   uiState.loading = true;
   render();
   try {
-    const matches = await fetchKNHBMatchesForTeam(teamId);
+    const matches = await fetchKNHBMatchesForTeam(teamId, "upcoming");
     uiState.foundMatches = dedupeMatches(matches);
     uiState.output = `Loaded ${uiState.foundMatches.length} upcoming matches`;
   } catch (error) {
@@ -684,9 +702,40 @@ async function loadKNHBMatchesForFavorite(favorite: FavoriteTeam): Promise<void>
         }
       }
     }
-    const all = await Promise.all(relatedTeamIds.map((teamId) => fetchKNHBMatchesForTeam(teamId)));
+    const all = await Promise.all(relatedTeamIds.map((teamId) => fetchKNHBMatchesForTeam(teamId, "upcoming")));
     uiState.foundMatches = dedupeMatches(all.flat());
     uiState.output = `Loaded ${uiState.foundMatches.length} upcoming matches`;
+  } catch (error) {
+    uiState.output = (error as Error).message;
+  } finally {
+    uiState.loading = false;
+    render();
+  }
+}
+
+async function refreshMatchMetadataFromKNHB(match: MatchMetadata): Promise<void> {
+  const knhbMatchId = match.knhbMatchId?.trim();
+  const teamId = match.knhbSourceTeamId?.trim();
+  if (!knhbMatchId || !teamId) {
+    uiState.output = "KNHB refresh requires KNHB Match ID and source Team ID.";
+    syncLivePanel();
+    return;
+  }
+
+  uiState.loading = true;
+  syncLivePanel();
+  try {
+    const [upcoming, official] = await Promise.all([
+      fetchKNHBMatchesForTeam(teamId, "upcoming"),
+      fetchKNHBMatchesForTeam(teamId, "official"),
+    ]);
+    const merged = dedupeMatches([...upcoming, ...official]);
+    const found = merged.find((item) => item.id === knhbMatchId);
+    if (!found) {
+      throw new Error(`KNHB match ${knhbMatchId} not found for team ${teamId}.`);
+    }
+    applyImportedMatch({ ...found, sourceTeamIds: [teamId] });
+    uiState.output = `Refreshed metadata from KNHB (${knhbMatchId}).`;
   } catch (error) {
     uiState.output = (error as Error).message;
   } finally {
@@ -1081,6 +1130,7 @@ function renderMatchView(match: MatchMetadata): string {
           <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
           <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
           <button id="saveMetadata">Save Metadata</button>
+          <button id="refreshKNHBMetadata" class="ghost" ${match.knhbMatchId && match.knhbSourceTeamId ? "" : "disabled"}>Refresh KNHB Data</button>
         </div>
       </section>
       <h3>Events</h3>
@@ -1485,11 +1535,18 @@ function wireHandlers(): void {
       locationClubName: locationClubName || undefined,
       fieldName: fieldName || undefined,
       knhbMatchId: knhbMatchId || undefined,
+      knhbSourceTeamId: selected.knhbSourceTeamId,
       matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
     });
     uiState.output = "Match metadata saved.";
     render();
     syncLivePanel();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#refreshKNHBMetadata")?.addEventListener("click", () => {
+    const selected = getSelectedMatch();
+    if (!selected) return;
+    void refreshMatchMetadataFromKNHB(selected);
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-action").forEach((element) => {

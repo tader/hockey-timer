@@ -193,6 +193,7 @@ const server = http.createServer(async (req, res) => {
   const knhbClubsMatch = url.pathname.match(/^\/knhb\/clubs$/);
   const knhbTeamsMatch = url.pathname.match(/^\/knhb\/clubs\/([^/]+)\/teams$/);
   const knhbUpcomingMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/upcoming$/);
+  const knhbOfficialMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/official$/);
 
   if (req.method === "POST" && upsertMatch) {
     const matchId = decodeURIComponent(upsertMatch[1]);
@@ -251,6 +252,12 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && knhbUpcomingMatch) {
     const teamId = encodeURIComponent(decodeURIComponent(knhbUpcomingMatch[1]));
     await proxyKnhbJson(res, `/teams/${teamId}/matches/upcoming`);
+    return;
+  }
+
+  if (req.method === "GET" && knhbOfficialMatch) {
+    const teamId = encodeURIComponent(decodeURIComponent(knhbOfficialMatch[1]));
+    await proxyKnhbJson(res, `/teams/${teamId}/matches/official`);
     return;
   }
 
