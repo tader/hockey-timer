@@ -98,6 +98,7 @@ type UIState = {
   metadataModalOpen: boolean;
   showEventStream: boolean;
   scoreboardMode: boolean;
+  showShortcutsModal: boolean;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -139,6 +140,7 @@ const uiState: UIState = {
   metadataModalOpen: false,
   showEventStream: true,
   scoreboardMode: false,
+  showShortcutsModal: false,
 };
 
 if (uiState.matches.length === 0) {
@@ -1198,6 +1200,35 @@ function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  const shortcutsModal = uiState.showShortcutsModal
+    ? `
+      <div class="modal-backdrop"></div>
+      <section class="card modal-card shortcuts-modal">
+        <div class="title-row">
+          <h3>Keyboard Shortcuts</h3>
+          <button id="closeShortcutsModal" class="ghost">Close</button>
+        </div>
+        <div class="shortcuts-grid">
+          <div><kbd>Space</kbd> Start/Pause/Resume</div>
+          <div><kbd>H</kbd> Home +1</div>
+          <div><kbd>Shift+H</kbd> Home -1</div>
+          <div><kbd>A</kbd> Away +1</div>
+          <div><kbd>Shift+A</kbd> Away -1</div>
+          <div><kbd>E</kbd> End Period</div>
+          <div><kbd>P</kbd> Previous Period</div>
+          <div><kbd>M</kbd> End Match</div>
+          <div><kbd>0</kbd> Reset Clock</div>
+          <div><kbd>,</kbd> -60s</div>
+          <div><kbd>.</kbd> +60s</div>
+          <div><kbd>&lt;</kbd> -10s</div>
+          <div><kbd>&gt;</kbd> +10s</div>
+          <div><kbd>R</kbd> Refresh</div>
+          <div><kbd>Esc</kbd> Exit scoreboard mode / back to list</div>
+          <div><kbd>?</kbd> Toggle this help</div>
+        </div>
+      </section>
+    `
+    : "";
   if (uiState.scoreboardMode) {
     return `
       <section class="scoreboard-screen">
@@ -1214,6 +1245,7 @@ function renderMatchView(match: MatchMetadata): string {
           <div id="scoreAway" class="scoreboard-team-value">${local.awayScore}</div>
         </div>
       </section>
+      ${shortcutsModal}
     `;
   }
   const fullscreenLabel = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
@@ -1336,6 +1368,7 @@ function renderMatchView(match: MatchMetadata): string {
         `
         : ""
     }
+    ${shortcutsModal}
   `;
 }
 
@@ -1478,10 +1511,25 @@ function initKeyboardShortcuts(): void {
   document.addEventListener("keydown", (event) => {
     if (uiState.view !== "match") return;
     if (isEditable(event.target)) return;
+    if (event.key === "?" || (event.key === "/" && event.shiftKey)) {
+      event.preventDefault();
+      uiState.showShortcutsModal = !uiState.showShortcutsModal;
+      render();
+      return;
+    }
+    if (uiState.showShortcutsModal) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        uiState.showShortcutsModal = false;
+        render();
+      }
+      return;
+    }
     if (event.key === "Escape") {
       if (uiState.scoreboardMode) {
         uiState.scoreboardMode = false;
         uiState.matchMenuOpen = false;
+        uiState.showShortcutsModal = false;
         render();
         return;
       }
@@ -1543,6 +1591,7 @@ function wireHandlers(): void {
     uiState.importTargetMatchId = undefined;
     uiState.matchMenuOpen = false;
     uiState.metadataModalOpen = false;
+    uiState.showShortcutsModal = false;
     render();
     void refreshListScores();
   });
@@ -1645,6 +1694,11 @@ function wireHandlers(): void {
 
   appRoot.querySelector<HTMLButtonElement>("#closeMetadataModal")?.addEventListener("click", () => {
     uiState.metadataModalOpen = false;
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#closeShortcutsModal")?.addEventListener("click", () => {
+    uiState.showShortcutsModal = false;
     render();
   });
 

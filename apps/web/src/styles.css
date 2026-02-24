@@ -381,6 +381,17 @@ select:focus {
   z-index: 31;
 }
 
+.shortcuts-modal {
+  width: min(720px, calc(100vw - 2rem));
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(14rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin-top: 0.5rem;
+}
+
 .scoreboard-screen {
   min-height: 100vh;
   width: 100%;
@@ -571,5 +582,9 @@ pre {
 
   .scoreboard-topline span {
     justify-self: center !important;
+  }
+
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
   }
 }
