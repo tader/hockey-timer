@@ -50,9 +50,10 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - `homeTeam`
   - `awayTeam`
   - optional `matchDateTime`
-  - optional `clubName`
-  - optional `teamName`
+  - optional `locationClubName`
+  - optional `fieldName`
   - optional `knhbMatchId`
+  - optional `knhbSourceTeamId` (source team used for KNHB refresh)
 - KNHB team selection must disambiguate teams that share the same name across
   competitions (e.g., `zaal` vs `veld`) by showing competition context.
 - Users can favorite/unfavorite KNHB teams for quick access.
@@ -81,10 +82,12 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - Match list should show match date (local, Europe/Amsterdam).
 - Match list should sort newest-first (based on match date/time, fallback to creation time).
 - Match list should support filtering by:
+  - team (matches home or away)
   - home team
   - away team
-  - club
-  - team
+  - club/location
+  - field
+  - source
 
 ## Web/Cloud Direction
 - Web stack backed by AWS serverless:

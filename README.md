@@ -55,7 +55,7 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
   - `backend/services/events/src/handlers.ts`
 - AWS infra template baseline:
   - `backend/infrastructure/template.yaml`
-- Web MVP shell:
+- Web MVP reference implementation (match list/manage/import/live controls):
   - `apps/web/index.html`
   - `apps/web/src/main.ts`
 - Unified Apple Xcode project (iOS + watch):

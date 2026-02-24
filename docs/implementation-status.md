@@ -11,6 +11,12 @@
   - projection polling
   - countdown + overtime display
   - end-period and end-match actions
+  - match list sorting and filters (team/home/away/location/field/source)
+  - custom match creation and quick-create flow
+  - KNHB import for new match or assigning metadata to existing match
+  - metadata editing, including `knhbMatchId` + `knhbSourceTeamId`
+  - KNHB metadata refresh using `upcoming` + `official` match feeds
+  - event stream table + scoreboard presentation mode
 - Local events server implemented for MVP demo.
 - Apple apps consolidated into one Xcode project:
   - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerIOS.xcodeproj`

@@ -31,6 +31,11 @@ Note: Android implementation is currently paused until Apple apps are satisfacto
 - Track unresolved decisions in `docs/decision-log.md`.
 - Keep delivery work tracked in `docs/tasks.md`.
 
+## Way of Working
+- For any requested change, update the relevant documentation before implementing code changes.
+- For any requested bug fix, document findings after the bug is fixed.
+- Whenever anything changes in the repository, create a git commit.
+
 ## Current Phase
 Apple + web MVP implementation and hardening:
 1. Implement new product features in web app first.
