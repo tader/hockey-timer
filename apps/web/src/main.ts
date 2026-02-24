@@ -22,6 +22,11 @@ type MatchEvent = {
   sequence?: number;
 };
 
+type MatchScore = {
+  homeScore: number;
+  awayScore: number;
+};
+
 type MatchMetadata = {
   id: string;
   source: "web-custom" | "knhb" | "local";
@@ -87,6 +92,8 @@ type UIState = {
   filterField: string;
   filterSource: "all" | "web-custom" | "knhb" | "local";
   liveNowMs: number;
+  listScores: Record<string, MatchScore>;
+  listScoresRefreshing: boolean;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -122,6 +129,8 @@ const uiState: UIState = {
   filterField: "",
   filterSource: "all",
   liveNowMs: Date.now(),
+  listScores: {},
+  listScoresRefreshing: false,
 };
 
 if (uiState.matches.length === 0) {
@@ -414,6 +423,19 @@ async function fetchEvents(matchId: string): Promise<MatchEvent[]> {
   return payload.events ?? [];
 }
 
+async function fetchProjectionSummary(matchId: string): Promise<MatchScore> {
+  const response = await fetch(`${API_BASE}/matches/${matchId}/projection`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`projection fetch failed: ${response.status} ${text}`);
+  }
+  const payload = (await response.json()) as { homeScore?: number; awayScore?: number };
+  return {
+    homeScore: Number(payload.homeScore ?? 0),
+    awayScore: Number(payload.awayScore ?? 0),
+  };
+}
+
 function formatClock(seconds: number): string {
   const safe = Math.max(0, seconds);
   const mm = String(Math.floor(safe / 60)).padStart(2, "0");
@@ -437,6 +459,40 @@ async function refreshProjection(): Promise<void> {
   } catch (error) {
     uiState.output = (error as Error).message;
     syncLivePanel();
+  }
+}
+
+async function refreshListScores(): Promise<void> {
+  if (uiState.view !== "list" || uiState.listScoresRefreshing) return;
+  uiState.listScoresRefreshing = true;
+  try {
+    const ids = filteredSortedMatches().map((match) => match.id);
+    if (ids.length === 0) return;
+    const fetched = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const score = await fetchProjectionSummary(id);
+          return [id, score] as const;
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+    let changed = false;
+    for (const item of fetched) {
+      if (!item) continue;
+      const [id, score] = item;
+      const current = uiState.listScores[id];
+      if (!current || current.homeScore !== score.homeScore || current.awayScore !== score.awayScore) {
+        uiState.listScores[id] = score;
+        changed = true;
+      }
+    }
+    if (changed && uiState.view === "list") {
+      render();
+    }
+  } finally {
+    uiState.listScoresRefreshing = false;
   }
 }
 
@@ -1022,6 +1078,7 @@ function renderListView(): string {
             <tr>
               <th><button class="table-sort js-sort" data-field="homeTeam">Home</button></th>
               <th><button class="table-sort js-sort" data-field="awayTeam">Away</button></th>
+              <th>Score</th>
               <th><button class="table-sort js-sort" data-field="matchDateTime">Date</button></th>
               <th><button class="table-sort js-sort" data-field="locationClubName">Location</button></th>
               <th><button class="table-sort js-sort" data-field="fieldName">Field</button></th>
@@ -1032,6 +1089,11 @@ function renderListView(): string {
               <tr class="js-open-match" data-match-id="${escapeHtml(match.id)}">
                 <td>${escapeHtml(match.homeTeam)}</td>
                 <td>${escapeHtml(match.awayTeam)}</td>
+                <td>${
+                  uiState.listScores[match.id]
+                    ? `${uiState.listScores[match.id].homeScore} - ${uiState.listScores[match.id].awayScore}`
+                    : "-"
+                }</td>
                 <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
                 <td>${escapeHtml(match.locationClubName ?? "")}</td>
                 <td>${escapeHtml(match.fieldName ?? "")}</td>
@@ -1327,6 +1389,7 @@ function wireHandlers(): void {
     uiState.importTarget = "new";
     uiState.importTargetMatchId = undefined;
     render();
+    void refreshListScores();
   });
 
   appRoot.querySelectorAll<HTMLButtonElement>(".js-sort").forEach((element) => {
@@ -1596,3 +1659,9 @@ setInterval(() => {
 setInterval(() => {
   void refreshProjection();
 }, 3000);
+setInterval(() => {
+  void refreshListScores();
+}, 5000);
+if (uiState.view === "list") {
+  void refreshListScores();
+}
