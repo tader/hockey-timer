@@ -1224,7 +1224,6 @@ function render(): void {
 
   appRoot.innerHTML = `
     <h1>Hockey Timer</h1>
-    <p class="muted">List-first workflow with full keyboard control in match view.</p>
     ${body}
   `;
   wireHandlers();
