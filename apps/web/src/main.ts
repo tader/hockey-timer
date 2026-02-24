@@ -23,8 +23,8 @@ type MatchMetadata = {
   matchDateTime?: string;
   homeTeam: string;
   awayTeam: string;
-  clubName?: string;
-  teamName?: string;
+  locationClubName?: string;
+  fieldName?: string;
   knhbMatchId?: string;
 };
 
@@ -40,6 +40,8 @@ type KNHBMatch = {
   homeTeam: string;
   awayTeam: string;
   dateRaw?: string;
+  locationClubName?: string;
+  fieldName?: string;
 };
 
 type FavoriteTeam = {
@@ -68,12 +70,12 @@ type UIState = {
   createMode: "knhb" | "custom";
   importTarget: "new" | "update";
   importTargetMatchId?: string;
-  sortField: "homeTeam" | "awayTeam" | "matchDateTime" | "clubName" | "teamName" | "source" | "createdAt";
+  sortField: "homeTeam" | "awayTeam" | "matchDateTime" | "locationClubName" | "fieldName" | "source" | "createdAt";
   sortDirection: "asc" | "desc";
   filterHome: string;
   filterAway: string;
   filterClub: string;
-  filterTeam: string;
+  filterField: string;
   filterSource: string;
   liveNowMs: number;
 };
@@ -107,7 +109,7 @@ const uiState: UIState = {
   filterHome: "",
   filterAway: "",
   filterClub: "",
-  filterTeam: "",
+  filterField: "",
   filterSource: "",
   liveNowMs: Date.now(),
 };
@@ -120,8 +122,8 @@ if (uiState.matches.length === 0) {
     matchDateTime: new Date().toISOString(),
     homeTeam: "Home",
     awayTeam: "Away",
-    clubName: "Demo Club",
-    teamName: "Demo Team",
+    locationClubName: "Demo Club",
+    fieldName: "Field 1",
   };
   uiState.matches = [demo];
   saveMatches(uiState.matches);
@@ -154,13 +156,26 @@ function matchSubtitle(match: MatchMetadata): string {
       parts.push(formatted);
     }
   }
-  if (match.clubName) {
-    parts.push(match.clubName);
+  if (match.locationClubName && !isAtHomeLocation(match)) {
+    parts.push(match.locationClubName);
   }
-  if (match.teamName) {
-    parts.push(match.teamName);
+  if (match.fieldName) {
+    parts.push(match.fieldName);
   }
   return parts.join(" • ");
+}
+
+function inferHomeClubFromTeamName(homeTeam: string): string | undefined {
+  const token = homeTeam.trim().split(/\s+/)[0];
+  if (!token) return undefined;
+  return token.replace(/[^A-Za-z0-9-]/g, "").toLowerCase();
+}
+
+function isAtHomeLocation(match: MatchMetadata): boolean {
+  if (!match.locationClubName) return true;
+  const inferred = inferHomeClubFromTeamName(match.homeTeam);
+  if (!inferred) return false;
+  return match.locationClubName.toLowerCase() === inferred;
 }
 
 function sortedMatches(matches: MatchMetadata[]): MatchMetadata[] {
@@ -196,9 +211,35 @@ function loadMatches(): MatchMetadata[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is MatchMetadata => {
-      return !!item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string";
-    });
+    const normalized: MatchMetadata[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object" || typeof (item as { id?: unknown }).id !== "string") {
+        continue;
+      }
+      const raw = item as Record<string, unknown>;
+      normalized.push({
+        id: String(raw.id),
+        source: (raw.source === "web-custom" || raw.source === "knhb" || raw.source === "local")
+          ? raw.source
+          : "local",
+        createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+        matchDateTime: typeof raw.matchDateTime === "string" ? raw.matchDateTime : undefined,
+        homeTeam: typeof raw.homeTeam === "string" ? raw.homeTeam : "Home",
+        awayTeam: typeof raw.awayTeam === "string" ? raw.awayTeam : "Away",
+        locationClubName: typeof raw.locationClubName === "string"
+          ? raw.locationClubName
+          : typeof raw.clubName === "string"
+            ? raw.clubName
+            : undefined,
+        fieldName: typeof raw.fieldName === "string"
+          ? raw.fieldName
+          : typeof raw.teamName === "string"
+            ? raw.teamName
+            : undefined,
+        knhbMatchId: typeof raw.knhbMatchId === "string" ? raw.knhbMatchId : undefined,
+      });
+    }
+    return normalized;
   } catch {
     return [];
   }
@@ -295,15 +336,13 @@ function createQuickMatch(): MatchMetadata {
     matchDateTime: now,
     homeTeam: "Home",
     awayTeam: "Away",
-    clubName: undefined,
-    teamName: "Quick Match",
+    locationClubName: undefined,
+    fieldName: undefined,
   };
 }
 
 function applyImportedMatch(selected: KNHBMatch): void {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
-  const selectedTeam = uiState.teams.find((team) => team.id === uiState.selectedTeamId);
-  const selectedFavorite = uiState.favoriteTeams.find((team) => team.key === uiState.activeFavoriteKey);
   const base: MatchMetadata = {
     id: `knhb-${selected.id}`,
     source: "knhb",
@@ -311,8 +350,8 @@ function applyImportedMatch(selected: KNHBMatch): void {
     homeTeam: selected.homeTeam,
     awayTeam: selected.awayTeam,
     matchDateTime: parsePossibleDate(selected.dateRaw),
-    clubName: selectedClub?.abbreviation ?? selectedClub?.name,
-    teamName: selectedFavorite?.name ?? selectedTeam?.name,
+    locationClubName: selected.locationClubName ?? selectedClub?.abbreviation ?? selectedClub?.name,
+    fieldName: selected.fieldName,
     knhbMatchId: selected.id,
   };
 
@@ -325,8 +364,8 @@ function applyImportedMatch(selected: KNHBMatch): void {
         homeTeam: base.homeTeam,
         awayTeam: base.awayTeam,
         matchDateTime: base.matchDateTime,
-        clubName: base.clubName,
-        teamName: base.teamName,
+        locationClubName: base.locationClubName,
+        fieldName: base.fieldName,
         knhbMatchId: base.knhbMatchId,
       });
       uiState.selectedMatchId = existing.id;
@@ -748,7 +787,13 @@ async function fetchKNHBMatchesForTeam(teamId: string): Promise<KNHBMatch[]> {
       "date", "datum", "startDateTime", "start", "starttime", "starttijd", "aanvang", "aanvangstijd",
       "plannedStart", "beginDateTime", "speeldatum", "datetime",
     ]);
-    matches.push({ id, homeTeam, awayTeam, dateRaw });
+    const locationClubName = firstString(item, [
+      "locationClub", "club", "clubnaam", "location", "speellocatie", "accommodatie", "venueClub",
+    ]);
+    const fieldName = firstString(item, [
+      "field", "fieldName", "veld", "veldnaam", "pitch", "court", "zaal",
+    ]);
+    matches.push({ id, homeTeam, awayTeam, dateRaw, locationClubName, fieldName });
   }
   return matches;
 }
@@ -828,14 +873,14 @@ function filteredSortedMatches(): MatchMetadata[] {
     home: uiState.filterHome.trim().toLowerCase(),
     away: uiState.filterAway.trim().toLowerCase(),
     club: uiState.filterClub.trim().toLowerCase(),
-    team: uiState.filterTeam.trim().toLowerCase(),
+    field: uiState.filterField.trim().toLowerCase(),
     source: uiState.filterSource.trim().toLowerCase(),
   };
   const filtered = uiState.matches.filter((match) => {
     if (normalized.home && !match.homeTeam.toLowerCase().includes(normalized.home)) return false;
     if (normalized.away && !match.awayTeam.toLowerCase().includes(normalized.away)) return false;
-    if (normalized.club && !(match.clubName ?? "").toLowerCase().includes(normalized.club)) return false;
-    if (normalized.team && !(match.teamName ?? "").toLowerCase().includes(normalized.team)) return false;
+    if (normalized.club && !(match.locationClubName ?? "").toLowerCase().includes(normalized.club)) return false;
+    if (normalized.field && !(match.fieldName ?? "").toLowerCase().includes(normalized.field)) return false;
     if (normalized.source && !match.source.toLowerCase().includes(normalized.source)) return false;
     return true;
   });
@@ -1045,8 +1090,8 @@ function renderListView(): string {
       <div class="filters-grid">
         <input id="filterHome" placeholder="Filter home" value="${escapeHtml(uiState.filterHome)}" />
         <input id="filterAway" placeholder="Filter away" value="${escapeHtml(uiState.filterAway)}" />
-        <input id="filterClub" placeholder="Filter club" value="${escapeHtml(uiState.filterClub)}" />
-        <input id="filterTeam" placeholder="Filter team" value="${escapeHtml(uiState.filterTeam)}" />
+        <input id="filterClub" placeholder="Filter location club" value="${escapeHtml(uiState.filterClub)}" />
+        <input id="filterField" placeholder="Filter field" value="${escapeHtml(uiState.filterField)}" />
         <input id="filterSource" placeholder="Filter source" value="${escapeHtml(uiState.filterSource)}" />
       </div>
       <div class="table-wrap">
@@ -1056,8 +1101,8 @@ function renderListView(): string {
               <th><button class="table-sort js-sort" data-field="homeTeam">Home</button></th>
               <th><button class="table-sort js-sort" data-field="awayTeam">Away</button></th>
               <th><button class="table-sort js-sort" data-field="matchDateTime">Date</button></th>
-              <th><button class="table-sort js-sort" data-field="clubName">Club</button></th>
-              <th><button class="table-sort js-sort" data-field="teamName">Team</button></th>
+              <th><button class="table-sort js-sort" data-field="locationClubName">Location Club</button></th>
+              <th><button class="table-sort js-sort" data-field="fieldName">Field</button></th>
               <th><button class="table-sort js-sort" data-field="source">Source</button></th>
             </tr>
           </thead>
@@ -1067,8 +1112,8 @@ function renderListView(): string {
                 <td>${escapeHtml(match.homeTeam)}</td>
                 <td>${escapeHtml(match.awayTeam)}</td>
                 <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
-                <td>${escapeHtml(match.clubName ?? "")}</td>
-                <td>${escapeHtml(match.teamName ?? "")}</td>
+                <td>${escapeHtml(isAtHomeLocation(match) ? "" : (match.locationClubName ?? ""))}</td>
+                <td>${escapeHtml(match.fieldName ?? "")}</td>
                 <td>${escapeHtml(match.source)}</td>
               </tr>
             `).join("")}
@@ -1103,8 +1148,8 @@ function renderCreateView(): string {
             <div class="stack">
               <input id="createHome" type="text" placeholder="Home team" />
               <input id="createAway" type="text" placeholder="Away team" />
-              <input id="createClub" type="text" placeholder="Club (optional)" />
-              <input id="createTeam" type="text" placeholder="Team (optional)" />
+              <input id="createLocationClub" type="text" placeholder="Location club (optional)" />
+              <input id="createFieldName" type="text" placeholder="Field name (optional)" />
               <label for="createDateTime">Match date/time</label>
               <input id="createDateTime" type="datetime-local" />
               <button id="createMatch">Create Custom Match</button>
@@ -1163,8 +1208,8 @@ function renderMatchView(match: MatchMetadata): string {
         <div class="filters-grid">
           <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
           <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
-          <input id="editClub" value="${escapeHtml(match.clubName ?? "")}" placeholder="Club" />
-          <input id="editTeam" value="${escapeHtml(match.teamName ?? "")}" placeholder="Team" />
+          <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location club" />
+          <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
           <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
         </div>
         <div class="row">
@@ -1331,7 +1376,7 @@ function wireHandlers(): void {
     ["filterHome", "filterHome"],
     ["filterAway", "filterAway"],
     ["filterClub", "filterClub"],
-    ["filterTeam", "filterTeam"],
+    ["filterField", "filterField"],
     ["filterSource", "filterSource"],
   ] as const) {
     const input = appRoot.querySelector<HTMLInputElement>(`#${id}`);
@@ -1389,8 +1434,8 @@ function wireHandlers(): void {
   appRoot.querySelector<HTMLButtonElement>("#createMatch")?.addEventListener("click", () => {
     const homeTeam = (appRoot.querySelector<HTMLInputElement>("#createHome")?.value ?? "").trim() || "Home";
     const awayTeam = (appRoot.querySelector<HTMLInputElement>("#createAway")?.value ?? "").trim() || "Away";
-    const clubName = (appRoot.querySelector<HTMLInputElement>("#createClub")?.value ?? "").trim();
-    const teamName = (appRoot.querySelector<HTMLInputElement>("#createTeam")?.value ?? "").trim();
+    const locationClubName = (appRoot.querySelector<HTMLInputElement>("#createLocationClub")?.value ?? "").trim();
+    const fieldName = (appRoot.querySelector<HTMLInputElement>("#createFieldName")?.value ?? "").trim();
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#createDateTime")?.value ?? "";
     const metadata: MatchMetadata = {
       id: `web-${crypto.randomUUID().toLowerCase()}`,
@@ -1399,8 +1444,8 @@ function wireHandlers(): void {
       homeTeam,
       awayTeam,
       matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
-      clubName: clubName || undefined,
-      teamName: teamName || undefined,
+      locationClubName: locationClubName || undefined,
+      fieldName: fieldName || undefined,
     };
     upsertMatch(metadata);
     uiState.selectedMatchId = metadata.id;
@@ -1535,16 +1580,16 @@ function wireHandlers(): void {
     if (!selected) return;
     const homeTeam = (appRoot.querySelector<HTMLInputElement>("#editHome")?.value ?? "").trim() || "Home";
     const awayTeam = (appRoot.querySelector<HTMLInputElement>("#editAway")?.value ?? "").trim() || "Away";
-    const clubName = (appRoot.querySelector<HTMLInputElement>("#editClub")?.value ?? "").trim();
-    const teamName = (appRoot.querySelector<HTMLInputElement>("#editTeam")?.value ?? "").trim();
+    const locationClubName = (appRoot.querySelector<HTMLInputElement>("#editLocationClub")?.value ?? "").trim();
+    const fieldName = (appRoot.querySelector<HTMLInputElement>("#editFieldName")?.value ?? "").trim();
     const knhbMatchId = (appRoot.querySelector<HTMLInputElement>("#editKNHBMatchId")?.value ?? "").trim();
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#editDateTime")?.value ?? "";
     upsertMatch({
       ...selected,
       homeTeam,
       awayTeam,
-      clubName: clubName || undefined,
-      teamName: teamName || undefined,
+      locationClubName: locationClubName || undefined,
+      fieldName: fieldName || undefined,
       knhbMatchId: knhbMatchId || undefined,
       matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
     });
