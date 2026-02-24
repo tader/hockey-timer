@@ -650,18 +650,32 @@ function renderEventsList(): string {
   if (uiState.events.length === 0) {
     return `<div class="muted">No events yet</div>`;
   }
-  return uiState.events
+  const rows = [...uiState.events]
+    .reverse()
     .map((event) => {
       const payload = summarizePayload(event.payload);
       return `
-        <div class="event-item">
-          <div><strong>${escapeHtml(event.eventType)}</strong></div>
-          <div class="muted">${escapeHtml(formatAmsterdamDateTime(event.occurredAt))}</div>
-          ${payload ? `<div class="muted">${escapeHtml(payload)}</div>` : ""}
-        </div>
+        <tr>
+          <td><strong>${escapeHtml(event.eventType)}</strong></td>
+          <td class="muted">${escapeHtml(formatAmsterdamDateTime(event.occurredAt))}</td>
+          <td class="muted">${payload ? escapeHtml(payload) : ""}</td>
+        </tr>
       `;
-    })
-    .join("");
+    }).join("");
+  return `
+    <div class="table-wrap">
+      <table class="events-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Occurred At</th>
+            <th>Payload</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function jsonObjects(value: unknown): Record<string, unknown>[] {

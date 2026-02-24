@@ -158,6 +158,12 @@ select:focus {
   min-width: 62rem;
 }
 
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 44rem;
+}
+
 .matches-table thead th {
   position: sticky;
   top: 0;
@@ -166,7 +172,9 @@ select:focus {
 }
 
 .matches-table th,
-.matches-table td {
+.matches-table td,
+.events-table th,
+.events-table td {
   border-bottom: 1px solid #e2ebf2;
   padding: 0.6rem 0.65rem;
   text-align: left;
