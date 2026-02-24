@@ -390,7 +390,7 @@ async function emitMatchMetadataEvent(
   }
 }
 
-async function applyImportedMatch(selected: KNHBMatch): Promise<void> {
+async function applyImportedMatch(selected: KNHBMatch, options?: { forceUpdateMatchId?: string }): Promise<void> {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
   const importSourceTeamId = selected.sourceTeamIds?.[0] ?? uiState.selectedTeamId ?? undefined;
   const base = toImportedMatchMetadata(selected, {
@@ -401,8 +401,9 @@ async function applyImportedMatch(selected: KNHBMatch): Promise<void> {
   let updatedMatch: MatchMetadata | undefined;
   let created = false;
 
-  if (uiState.importTarget === "update" && uiState.importTargetMatchId) {
-    const existing = uiState.matches.find((item) => item.id === uiState.importTargetMatchId);
+  const updateTargetId = options?.forceUpdateMatchId ?? (uiState.importTarget === "update" ? uiState.importTargetMatchId : undefined);
+  if (updateTargetId) {
+    const existing = uiState.matches.find((item) => item.id === updateTargetId);
     if (existing) {
       updatedMatch = {
         ...existing,
@@ -858,7 +859,7 @@ async function refreshMatchMetadataFromKNHB(match: MatchMetadata): Promise<void>
     if (!found) {
       throw new Error(`KNHB match ${knhbMatchId} not found for team ${teamId}.`);
     }
-    await applyImportedMatch({ ...found, sourceTeamIds: [teamId] });
+    await applyImportedMatch({ ...found, sourceTeamIds: [teamId] }, { forceUpdateMatchId: match.id });
     uiState.output = `Refreshed metadata from KNHB (${knhbMatchId}).`;
   } catch (error) {
     uiState.output = (error as Error).message;
