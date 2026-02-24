@@ -41,6 +41,7 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - User must be able to end the match explicitly from match controls.
 - Web match-view time controls should be ordered for operational flow:
   - row 1: one primary control that changes by state (`Start`/`Pause`/`Resume`)
+  - this primary control reads `Start` before first clock start, and appears red while clock is running (pause action)
   - row 2: `Reset Clock`, plus `End Match` only while the game is paused
   - timer/status block
   - row 3: `+ Period`, `+ 1:00`, `+ 0:10`

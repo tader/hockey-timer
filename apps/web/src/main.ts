@@ -1228,6 +1228,7 @@ function renderMatchView(match: MatchMetadata): string {
   const primaryAction = local.isEnded ? undefined : local.isRunning ? "pause" : matchStarted ? "resume" : "start";
   const primaryLabel = local.isEnded ? "Match Ended" : local.isRunning ? "Pause" : matchStarted ? "Resume" : "Start";
   const primaryHotkey = local.isRunning || matchStarted ? "Space" : "S";
+  const primaryClass = local.isRunning ? "danger" : "neutral-action";
   const canEndMatch = !local.isRunning && !local.isEnded && matchStarted;
   const shortcutsModal = uiState.showShortcutsModal
     ? `
@@ -1320,7 +1321,7 @@ function renderMatchView(match: MatchMetadata): string {
               </div>
               <div class="grid-cell center-top-controls">
                 <div class="time-controls-row">
-                  <button class="js-action neutral-action" data-action="${primaryAction ?? ""}" ${primaryAction ? "" : "disabled"}>${primaryLabel} <kbd>${primaryHotkey}</kbd></button>
+                  <button class="js-action ${primaryClass}" data-action="${primaryAction ?? ""}" ${primaryAction ? "" : "disabled"}>${primaryLabel} <kbd>${primaryHotkey}</kbd></button>
                 </div>
                 <div class="time-controls-row">
                   ${canEndMatch ? `<button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>` : ""}
