@@ -2,6 +2,7 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "allowImportingTsExtensions": true,
     "paths": {
       "@hockey-timer/event-schema": ["../../../shared/event-schema/src/index.ts"],
       "@hockey-timer/replay-engine": ["../../../shared/replay-engine/src/index.ts"]

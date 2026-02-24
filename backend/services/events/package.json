@@ -6,7 +6,8 @@
   "main": "dist/handlers.js",
   "types": "dist/handlers.d.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/**/*.test.ts"
   },
   "dependencies": {
     "@hockey-timer/event-schema": "0.1.0",

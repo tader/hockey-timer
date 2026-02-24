@@ -28,6 +28,7 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 - Match title:
   - Format as `${home_team.name} – ${away_team.name}` (home first).
   - Avoid placeholder labels such as `Home` / `Away` unless source data truly lacks team names.
+  - Guard against malformed payloads where timestamp values appear in team fields; treat timestamp-like values as invalid team names.
 - Match metadata persistence:
   - Persist `homeTeam`, `awayTeam`, and `knhbMatchId` for imported matches.
 - Team favorites:
@@ -55,6 +56,13 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
 - If KNHB unavailable:
   - allow manual match setup/editing
   - keep timer functionality independent of KNHB access
+
+## Testing Coverage
+- Web KNHB parsing and mapping logic has unit tests that cover:
+  - timestamp token detection
+  - display-string parsing fallback behavior
+  - preventing datetime strings from being used as away-team names
+  - mapping parsed KNHB values into match metadata
 
 ## Open Questions
 1. Is authentication required for all target KNHB resources?

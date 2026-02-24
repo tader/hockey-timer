@@ -11,6 +11,8 @@
   "scripts": {
     "check": "npm run --workspaces typecheck",
     "typecheck": "npm run --workspaces typecheck",
+    "test": "npm run --workspaces test",
+    "test:web": "npm run -w @hockey-timer/web test",
     "build:web": "npm run -w @hockey-timer/web build",
     "dev:web": "npm run -w @hockey-timer/web dev",
     "start:events": "node backend/services/events/local-server.mjs",

@@ -1,3 +1,9 @@
+import {
+  firstString,
+  parseKNHBMatchItem,
+  toImportedMatchMetadata,
+} from "./knhb-parsing.js";
+
 const API_BASE = (globalThis as { __API_BASE__?: string }).__API_BASE__ ?? "http://localhost:8787";
 const KNHB_BASE = `${API_BASE}/knhb`;
 const matchesKey = "hockey_timer_web_matches";
@@ -343,17 +349,11 @@ function createQuickMatch(): MatchMetadata {
 
 function applyImportedMatch(selected: KNHBMatch): void {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
-  const base: MatchMetadata = {
-    id: `knhb-${selected.id}`,
-    source: "knhb",
-    createdAt: new Date().toISOString(),
-    homeTeam: selected.homeTeam,
-    awayTeam: selected.awayTeam,
-    matchDateTime: parsePossibleDate(selected.dateRaw),
-    locationClubName: selected.locationClubName ?? selectedClub?.abbreviation ?? selectedClub?.name,
-    fieldName: selected.fieldName,
-    knhbMatchId: selected.id,
-  };
+  const base = toImportedMatchMetadata(selected, {
+    nowIso: new Date().toISOString(),
+    parsedDateIso: parsePossibleDate(selected.dateRaw),
+    selectedClubName: selectedClub?.abbreviation ?? selectedClub?.name,
+  });
 
   if (uiState.importTarget === "update" && uiState.importTargetMatchId) {
     const existing = uiState.matches.find((item) => item.id === uiState.importTargetMatchId);
@@ -575,123 +575,6 @@ function jsonObjects(value: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function scalarString(value: unknown): string | undefined {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number") return String(value);
-  if (value && typeof value === "object") {
-    const dict = value as Record<string, unknown>;
-    for (const key of ["name", "naam", "teamnaam", "omschrijving", "label", "value", "text"]) {
-      const nested = dict[key];
-      if (typeof nested === "string" && nested.trim()) {
-        return nested.trim();
-      }
-    }
-  }
-  return undefined;
-}
-
-function recursiveLookup(value: unknown, allowedLowerKeys: Set<string>): string | undefined {
-  if (Array.isArray(value)) {
-    for (const nested of value) {
-      const found = recursiveLookup(nested, allowedLowerKeys);
-      if (found) return found;
-    }
-    return undefined;
-  }
-
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const dict = value as Record<string, unknown>;
-  for (const [key, nested] of Object.entries(dict)) {
-    if (allowedLowerKeys.has(key.toLowerCase())) {
-      const found = scalarString(nested);
-      if (found) return found;
-    }
-  }
-  for (const nested of Object.values(dict)) {
-    const found = recursiveLookup(nested, allowedLowerKeys);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-function firstString(dict: Record<string, unknown>, keys: string[]): string | undefined {
-  return recursiveLookup(dict, new Set(keys.map((key) => key.toLowerCase())));
-}
-
-function parseTeamsFromDisplay(display: string | undefined): { homeTeam?: string; awayTeam?: string } {
-  if (!display) return {};
-  const normalized = display.trim();
-  if (!normalized) return {};
-
-  for (const separator of [" – ", " vs ", " VS ", " - ", " tegen "]) {
-    const parts = normalized.split(separator).map((part) => part.trim()).filter(Boolean);
-    if (parts.length === 2) {
-      if (looksLikeDateToken(parts[1])) {
-        continue;
-      }
-      return { homeTeam: parts[0], awayTeam: parts[1] };
-    }
-  }
-  return {};
-}
-
-function looksLikeDateToken(value: string): boolean {
-  const token = value.trim();
-  if (!token) return false;
-  if (/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(token)) return true;
-  if (/^\d{2}-\d{2}-\d{4}(?:[ T].*)?$/.test(token)) return true;
-  if (/^\d{4}\/\d{2}\/\d{2}(?:[ T].*)?$/.test(token)) return true;
-  if (/^\d{2}:\d{2}(?::\d{2})?$/.test(token)) return true;
-  if (token.includes("T") && token.includes("Z")) return true;
-  return false;
-}
-
-function extractTeamBySide(dict: Record<string, unknown>, side: "home" | "away"): string | undefined {
-  const sideTokens =
-    side === "home"
-      ? ["home", "thuis", "host", "h"]
-      : ["away", "uit", "guest", "a"];
-
-  const walk = (value: unknown): string | undefined => {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = walk(item);
-        if (found) return found;
-      }
-      return undefined;
-    }
-    if (!value || typeof value !== "object") {
-      return undefined;
-    }
-
-    const object = value as Record<string, unknown>;
-    const sideHint = firstString(object, ["side", "type", "thuisUit", "thuisuit", "rol", "role"]);
-    if (sideHint && sideTokens.some((token) => sideHint.toLowerCase().includes(token))) {
-      const name = firstString(object, ["name", "naam", "teamnaam", "teamName", "omschrijving", "title"]);
-      if (name) return name;
-    }
-
-    for (const [key, nested] of Object.entries(object)) {
-      const lowered = key.toLowerCase();
-      if (sideTokens.some((token) => lowered.includes(token))) {
-        const direct = scalarString(nested);
-        if (direct) return direct;
-      }
-    }
-
-    for (const nested of Object.values(object)) {
-      const found = walk(nested);
-      if (found) return found;
-    }
-    return undefined;
-  };
-
-  return walk(dict);
-}
-
 async function fetchKNHBOptions(url: string, preferredNameKeys: string[]): Promise<KNHBOption[]> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -762,38 +645,9 @@ async function fetchKNHBMatchesForTeam(teamId: string): Promise<KNHBMatch[]> {
   const payload = (await response.json()) as unknown;
   const matches: KNHBMatch[] = [];
   for (const item of jsonObjects(payload)) {
-    const id = firstString(item, ["id", "matchId", "wedstrijdcode", "wedstrijdnummer", "code"]);
-    if (!id) continue;
-    const displayTitle = firstString(item, ["title", "naam", "name", "omschrijving", "wedstrijd"]);
-    const parsedDisplay = parseTeamsFromDisplay(displayTitle);
-
-    const homeTeam =
-      firstString(item, [
-        "homeTeamName", "homeTeam", "teamhome", "teamHome", "thuisteam", "thuisTeam",
-        "thuisteamnaam", "home_team_name", "team_thuis", "thuis_team", "home_name", "home", "thuis",
-      ]) ??
-      extractTeamBySide(item, "home") ??
-      parsedDisplay.homeTeam ??
-      "Home";
-    const awayTeam =
-      firstString(item, [
-        "awayTeamName", "awayTeam", "teamaway", "teamAway", "uitteam", "uitTeam",
-        "uitteamnaam", "away_team_name", "team_uit", "uit_team", "away_name", "away", "uit",
-      ]) ??
-      extractTeamBySide(item, "away") ??
-      parsedDisplay.awayTeam ??
-      "Away";
-    const dateRaw = firstString(item, [
-      "date", "datum", "startDateTime", "start", "starttime", "starttijd", "aanvang", "aanvangstijd",
-      "plannedStart", "beginDateTime", "speeldatum", "datetime",
-    ]);
-    const locationClubName = firstString(item, [
-      "locationClub", "club", "clubnaam", "location", "speellocatie", "accommodatie", "venueClub",
-    ]);
-    const fieldName = firstString(item, [
-      "field", "fieldName", "veld", "veldnaam", "pitch", "court", "zaal",
-    ]);
-    matches.push({ id, homeTeam, awayTeam, dateRaw, locationClubName, fieldName });
+    const parsed = parseKNHBMatchItem(item);
+    if (!parsed) continue;
+    matches.push(parsed);
   }
   return matches;
 }

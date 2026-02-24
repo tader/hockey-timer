@@ -1,6 +1,6 @@
 import { replayMatch } from "@hockey-timer/replay-engine";
 import { type MatchEvent, sortEvents, validateEvent } from "@hockey-timer/event-schema";
-import { getEvents, upsertEvents } from "./store.js";
+import { getEvents, upsertEvents } from "./store.ts";
 
 type ApiEvent = {
   pathParameters?: { id?: string };

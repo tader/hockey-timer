@@ -73,6 +73,8 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
 ## Validation
 - Typecheck passes for all TypeScript workspaces:
   - `npm run check`
+- Unit tests across workspaces:
+  - `npm run test`
 
 ## Local Demo Run
 1. Start backend events service:

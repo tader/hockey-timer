@@ -26,3 +26,9 @@ export function upsertEvents(events: MatchEvent[]): { inserted: number; duplicat
 export function getEvents(matchId: string): MatchEvent[] {
   return eventsByMatch.get(matchId) ?? [];
 }
+
+// Test hook for deterministic unit tests.
+export function __resetStoreForTests(): void {
+  eventsByMatch.clear();
+  seenEventIds.clear();
+}

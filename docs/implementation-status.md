@@ -1,7 +1,7 @@
 # Implementation Status
 
 ## Last Updated
-2026-02-23
+2026-02-24
 
 ## Completed
 - Initial docs-first architecture and planning set created.
@@ -34,6 +34,14 @@
   - team label `${name} (${type})`
   - match title `${home_team.name} – ${away_team.name}`
   - UTC source datetime displayed as local date in `Europe/Amsterdam`
+- Unit tests added across core workspaces:
+  - `shared/event-schema`: ordering + validation tests
+  - `shared/replay-engine`: replay/projection behavior tests
+  - `backend/services/events`: handler validation/dedup/list/projection tests
+  - `apps/web`: KNHB parsing + metadata mapping tests
+- KNHB parsing hardened in web import flow:
+  - dedicated parser module with guards against timestamp-like team fields
+  - away-team timestamp regression covered by unit tests
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.
@@ -42,7 +50,7 @@
 
 ## Next Priorities
 1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.
-2. Add integration tests for replay, dedupe, and event ordering edge cases.
+2. Expand integration tests (cross-workspace end-to-end) on top of current unit coverage.
 3. Implement cloud/serverless persistence for events/projections beyond local demo server.
 4. Extend Apple gossip sync behavior and diagnostics for poor connectivity.
 5. Prepare Android backlog but keep implementation paused until Apple acceptance.
