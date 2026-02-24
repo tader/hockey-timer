@@ -390,6 +390,21 @@ async function emitMatchMetadataEvent(
   }
 }
 
+async function emitMatchFormatEvent(
+  matchId: string,
+  periodCount: number,
+  periodDurationSeconds: number[],
+): Promise<void> {
+  try {
+    await pushEvent(matchId, "match.format.updated", { periodCount, periodDurationSeconds });
+    if (uiState.selectedMatchId === matchId && uiState.view === "match") {
+      await refreshProjection();
+    }
+  } catch {
+    // Keep format updates resilient even when event transport is unavailable.
+  }
+}
+
 async function applyImportedMatch(selected: KNHBMatch, options?: { forceUpdateMatchId?: string }): Promise<void> {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
   const importSourceTeamId = selected.sourceTeamIds?.[0] ?? uiState.selectedTeamId ?? undefined;
@@ -656,12 +671,40 @@ function hasMatchStarted(events: MatchEvent[]): boolean {
   ));
 }
 
+function parsePeriodConfig(periodCountRaw: string, periodMinutesRaw: string): { periodCount: number; periodDurationSeconds: number[] } {
+  const parsedCount = Number(periodCountRaw);
+  const parsedMinutes = Number(periodMinutesRaw);
+  const periodCount = Math.max(1, Math.min(12, Number.isFinite(parsedCount) ? Math.round(parsedCount) : 4));
+  const periodMinutes = Math.max(1, Math.min(60, Number.isFinite(parsedMinutes) ? parsedMinutes : 17.5));
+  const durationSeconds = Math.round(periodMinutes * 60);
+  return {
+    periodCount,
+    periodDurationSeconds: Array.from({ length: periodCount }, () => durationSeconds),
+  };
+}
+
+function ordinal(value: number): string {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  const mod10 = value % 10;
+  if (mod10 === 1) return `${value}st`;
+  if (mod10 === 2) return `${value}nd`;
+  if (mod10 === 3) return `${value}rd`;
+  return `${value}th`;
+}
+
+function periodLabel(period: number, periodCount: number): string {
+  const unit = periodCount === 2 ? "Half" : periodCount === 4 ? "Quarter" : "Period";
+  return `${ordinal(period)} ${unit}`;
+}
+
 function primaryClockControlState(local: LocalProjection, events: MatchEvent[]): {
   action?: "start" | "pause" | "resume";
   label: string;
   hotkey: string;
   cssClass: "danger" | "neutral-action";
   canEndMatch: boolean;
+  canResetClock: boolean;
 } {
   const matchStarted = hasMatchStarted(events);
   const action = local.isEnded ? undefined : local.isRunning ? "pause" : matchStarted ? "resume" : "start";
@@ -669,7 +712,8 @@ function primaryClockControlState(local: LocalProjection, events: MatchEvent[]):
   const hotkey = local.isRunning || matchStarted ? "Space" : "S";
   const cssClass = local.isRunning ? "danger" : "neutral-action";
   const canEndMatch = !local.isRunning && !local.isEnded && matchStarted;
-  return { action, label, hotkey, cssClass, canEndMatch };
+  const canResetClock = !local.isRunning && !local.isEnded && local.currentPeriodPlayedSeconds > 0;
+  return { action, label, hotkey, cssClass, canEndMatch, canResetClock };
 }
 
 function renderEventsList(): string {
@@ -1225,6 +1269,8 @@ function renderCreateView(): string {
               <input id="createAway" type="text" placeholder="Away team" />
               <input id="createLocationClub" type="text" placeholder="Location (optional)" />
               <input id="createFieldName" type="text" placeholder="Field name (optional)" />
+              <input id="createPeriodCount" type="number" min="1" max="12" step="1" value="4" placeholder="Periods" />
+              <input id="createPeriodMinutes" type="number" min="1" max="60" step="0.5" value="17.5" placeholder="Minutes per period" />
               <label for="createDateTime">Match date/time</label>
               <input id="createDateTime" type="datetime-local" />
               <button id="createMatch">Create Custom Match</button>
@@ -1275,7 +1321,7 @@ function renderMatchView(match: MatchMetadata): string {
       <section class="scoreboard-screen">
         <div class="scoreboard-topline">
           <span>${escapeHtml(match.homeTeam)}</span>
-          <span>Period ${local.currentPeriod} • ${stateLabel}</span>
+          <span id="livePeriodSummary">${escapeHtml(periodLabel(local.currentPeriod, local.format.periodCount))} • ${stateLabel}</span>
           <span>${escapeHtml(match.awayTeam)}</span>
         </div>
         <div class="scoreboard-main">
@@ -1336,7 +1382,7 @@ function renderMatchView(match: MatchMetadata): string {
                 </div>
                 <div class="time-controls-row">
                   <button id="endMatchAction" class="js-action danger" data-action="endMatch" ${control.canEndMatch ? "" : "hidden"}>End Match <kbd>M</kbd></button>
-                  <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+                  <button id="resetClockAction" class="js-action clock-action" data-action="clockReset" ${control.canResetClock ? "" : "hidden"}>Reset Clock <kbd>0</kbd></button>
                 </div>
               </div>
               <div class="grid-cell score-control-top">
@@ -1352,7 +1398,7 @@ function renderMatchView(match: MatchMetadata): string {
         <div class="grid-cell clock-panel">
           <div id="liveClock" class="clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
           <div id="liveState" class="state-pill">${stateLabel}</div>
-          <div id="livePeriod" class="muted">Period ${local.currentPeriod}</div>
+          <div id="livePeriod" class="muted">${escapeHtml(periodLabel(local.currentPeriod, local.format.periodCount))}</div>
         </div>
         <div class="grid-cell team-score">
           <div class="team-label">Away</div>
@@ -1404,6 +1450,8 @@ function renderMatchView(match: MatchMetadata): string {
               <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
               <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
               <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
+              <input id="editPeriodCount" type="number" min="1" max="12" step="1" value="${String(local.format.periodCount)}" placeholder="Periods" />
+              <input id="editPeriodMinutes" type="number" min="1" max="60" step="0.5" value="${String((local.format.periodDurationSeconds[0] ?? 1050) / 60)}" placeholder="Minutes per period" />
             </div>
             <div class="row">
               <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
@@ -1452,16 +1500,19 @@ function syncLivePanel(): void {
   const scoreAway = appRoot.querySelector<HTMLElement>("#scoreAway");
   const state = appRoot.querySelector<HTMLElement>("#liveState");
   const period = appRoot.querySelector<HTMLElement>("#livePeriod");
+  const periodSummary = appRoot.querySelector<HTMLElement>("#livePeriodSummary");
   const clock = appRoot.querySelector<HTMLElement>("#liveClock");
   const output = appRoot.querySelector<HTMLElement>("#liveOutput");
   const events = appRoot.querySelector<HTMLElement>("#liveEvents");
   const primaryClockAction = appRoot.querySelector<HTMLButtonElement>("#primaryClockAction");
   const endMatchAction = appRoot.querySelector<HTMLButtonElement>("#endMatchAction");
+  const resetClockAction = appRoot.querySelector<HTMLButtonElement>("#resetClockAction");
 
   if (scoreHome) scoreHome.textContent = String(local.homeScore);
   if (scoreAway) scoreAway.textContent = String(local.awayScore);
   if (state) state.textContent = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
-  if (period) period.textContent = `Period ${local.currentPeriod}`;
+  if (period) period.textContent = periodLabel(local.currentPeriod, local.format.periodCount);
+  if (periodSummary) periodSummary.textContent = `${periodLabel(local.currentPeriod, local.format.periodCount)} • ${local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED"}`;
   if (clock) {
     clock.textContent = timer.label;
     clock.classList.toggle("overrun", timer.isOverrun);
@@ -1475,6 +1526,9 @@ function syncLivePanel(): void {
   }
   if (endMatchAction) {
     endMatchAction.hidden = !control.canEndMatch;
+  }
+  if (resetClockAction) {
+    resetClockAction.hidden = !control.canResetClock;
   }
   if (output) output.textContent = uiState.loading ? "Loading..." : uiState.output;
   if (events) events.innerHTML = renderEventsList();
@@ -1503,6 +1557,9 @@ async function triggerAction(action: string): Promise<void> {
   }
 
   if (action === "endMatch" && (local.isRunning || local.isEnded || !matchStarted)) {
+    return;
+  }
+  if (action === "clockReset" && (local.isRunning || local.isEnded || local.currentPeriodPlayedSeconds <= 0)) {
     return;
   }
 
@@ -1795,6 +1852,9 @@ function wireHandlers(): void {
     const locationClubName = (appRoot.querySelector<HTMLInputElement>("#createLocationClub")?.value ?? "").trim();
     const fieldName = (appRoot.querySelector<HTMLInputElement>("#createFieldName")?.value ?? "").trim();
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#createDateTime")?.value ?? "";
+    const periodCountRaw = appRoot.querySelector<HTMLInputElement>("#createPeriodCount")?.value ?? "";
+    const periodMinutesRaw = appRoot.querySelector<HTMLInputElement>("#createPeriodMinutes")?.value ?? "";
+    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw);
     const metadata: MatchMetadata = {
       id: `web-${crypto.randomUUID().toLowerCase()}`,
       source: "web-custom",
@@ -1807,6 +1867,7 @@ function wireHandlers(): void {
     };
     upsertMatch(metadata);
     void emitMatchMetadataEvent(metadata.id, "match.created", metadataPayload(metadata));
+    void emitMatchFormatEvent(metadata.id, periodConfig.periodCount, periodConfig.periodDurationSeconds);
     uiState.selectedMatchId = metadata.id;
     uiState.view = "match";
     uiState.importTarget = "new";
@@ -1946,6 +2007,9 @@ function wireHandlers(): void {
     const locationClubName = (appRoot.querySelector<HTMLInputElement>("#editLocationClub")?.value ?? "").trim();
     const fieldName = (appRoot.querySelector<HTMLInputElement>("#editFieldName")?.value ?? "").trim();
     const knhbMatchId = (appRoot.querySelector<HTMLInputElement>("#editKNHBMatchId")?.value ?? "").trim();
+    const periodCountRaw = appRoot.querySelector<HTMLInputElement>("#editPeriodCount")?.value ?? "";
+    const periodMinutesRaw = appRoot.querySelector<HTMLInputElement>("#editPeriodMinutes")?.value ?? "";
+    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw);
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#editDateTime")?.value ?? "";
     const updatedMatch: MatchMetadata = {
       ...selected,
@@ -1959,6 +2023,7 @@ function wireHandlers(): void {
     };
     upsertMatch(updatedMatch);
     void emitMatchMetadataEvent(updatedMatch.id, "match.updated", metadataPayload(updatedMatch));
+    void emitMatchFormatEvent(updatedMatch.id, periodConfig.periodCount, periodConfig.periodDurationSeconds);
     uiState.metadataModalOpen = false;
     uiState.matchMenuOpen = false;
     uiState.output = "Match metadata saved.";

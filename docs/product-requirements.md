@@ -42,11 +42,15 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - Web match-view time controls should be ordered for operational flow:
   - row 1: one primary control that changes by state (`Start`/`Pause`/`Resume`)
   - this primary control reads `Start` before first clock start, and appears red while clock is running (pause action)
-  - row 2: `Reset Clock`, plus `End Match` only while the game is paused
+  - row 2: `Reset Clock` only while game is paused and time has elapsed in current period; `End Match` only while the game is paused
   - timer/status block
   - row 3: `+ Period`, `+ 1:00`, `+ 0:10`
   - row 4: `- Period`, `- 1:00`, `- 0:10`
 - In web match view, `Refresh` should be available from the kebab menu.
+- Period label wording in match view should adapt to format:
+  - 2 periods: `Half` (for example `1st Half`)
+  - 4 periods: `Quarter` (for example `3rd Quarter`)
+  - any other count: `Period` (for example `6th Period`)
 
 ## Data Integration
 - Integrate KNHB Match Center endpoints, including examples:
@@ -87,6 +91,9 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 ## Match List & Metadata UX
 - Users can create custom matches.
 - Users can edit match metadata after creation/import.
+- In web custom create and edit metadata flows, users can set match format:
+  - period count
+  - duration per period (minutes; applied uniformly across all periods)
 - Match list should show match date (local, Europe/Amsterdam).
 - Match list should sort newest-first (based on match date/time, fallback to creation time).
 - Match list should support filtering by:
