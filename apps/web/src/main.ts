@@ -1236,6 +1236,16 @@ function applySort(field: UIState["sortField"]): void {
   }
 }
 
+function renderWithInputFocus(inputId: string, selectionStart: number | null, selectionEnd: number | null): void {
+  render();
+  const replacement = appRoot.querySelector<HTMLInputElement>(`#${inputId}`);
+  if (!replacement) return;
+  replacement.focus();
+  if (selectionStart !== null && selectionEnd !== null) {
+    replacement.setSelectionRange(selectionStart, selectionEnd);
+  }
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA" || target.isContentEditable;
@@ -1324,7 +1334,7 @@ function wireHandlers(): void {
     const input = appRoot.querySelector<HTMLInputElement>(`#${id}`);
     input?.addEventListener("input", () => {
       uiState[key] = input.value;
-      render();
+      renderWithInputFocus(id, input.selectionStart, input.selectionEnd);
     });
   }
 
