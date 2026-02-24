@@ -647,6 +647,15 @@ function summarizePayload(payload?: Record<string, unknown>): string {
   return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
 }
 
+function hasMatchStarted(events: MatchEvent[]): boolean {
+  return events.some((event) => (
+    event.eventType === "match.started" ||
+    event.eventType === "match.resumed" ||
+    event.eventType === "match.paused" ||
+    event.eventType === "match.ended"
+  ));
+}
+
 function renderEventsList(): string {
   if (uiState.events.length === 0) {
     return `<div class="muted">No events yet</div>`;
@@ -1213,8 +1222,13 @@ function renderCreateView(): string {
 
 function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
+  const matchStarted = hasMatchStarted(uiState.events);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  const primaryAction = local.isEnded ? undefined : local.isRunning ? "pause" : matchStarted ? "resume" : "start";
+  const primaryLabel = local.isEnded ? "Match Ended" : local.isRunning ? "Pause" : matchStarted ? "Resume" : "Start";
+  const primaryHotkey = local.isRunning || matchStarted ? "Space" : "S";
+  const canEndMatch = !local.isRunning && !local.isEnded && matchStarted;
   const shortcutsModal = uiState.showShortcutsModal
     ? `
       <div class="modal-backdrop"></div>
@@ -1231,7 +1245,7 @@ function renderMatchView(match: MatchMetadata): string {
           <div><kbd>Shift+A</kbd> Away -1</div>
           <div><kbd>E</kbd> End Period</div>
           <div><kbd>P</kbd> Previous Period</div>
-          <div><kbd>M</kbd> End Match</div>
+          <div><kbd>M</kbd> End Match (paused)</div>
           <div><kbd>0</kbd> Reset Clock</div>
           <div><kbd>,</kbd> -60s</div>
           <div><kbd>.</kbd> +60s</div>
@@ -1305,13 +1319,11 @@ function renderMatchView(match: MatchMetadata): string {
                 <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
               </div>
               <div class="grid-cell center-top-controls">
-                <div class="time-controls-row two-cols">
-                  <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
-                  <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+                <div class="time-controls-row">
+                  <button class="js-action neutral-action" data-action="${primaryAction ?? ""}" ${primaryAction ? "" : "disabled"}>${primaryLabel} <kbd>${primaryHotkey}</kbd></button>
                 </div>
-                <div class="time-controls-row three-cols">
-                  <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-                  <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+                <div class="time-controls-row">
+                  ${canEndMatch ? `<button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>` : ""}
                   <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
                 </div>
               </div>
@@ -1448,6 +1460,7 @@ async function triggerAction(action: string): Promise<void> {
   if (!selectedMatch) return;
 
   const local = replayKnownEvents(uiState.events, Date.now());
+  const matchStarted = hasMatchStarted(uiState.events);
   if (action === "previousPeriod") {
     if (local.currentPeriod <= 1) {
       uiState.output = "Already at first period.";
@@ -1461,6 +1474,10 @@ async function triggerAction(action: string): Promise<void> {
       uiState.output = (error as Error).message;
       syncLivePanel();
     }
+    return;
+  }
+
+  if (action === "endMatch" && (local.isRunning || local.isEnded || !matchStarted)) {
     return;
   }
 
@@ -1568,7 +1585,7 @@ function initKeyboardShortcuts(): void {
     if (event.key === " ") {
       event.preventDefault();
       const local = replayKnownEvents(uiState.events, Date.now());
-      const hasStarted = uiState.events.some((item) => item.eventType === "match.started");
+      const hasStarted = hasMatchStarted(uiState.events);
       if (local.isRunning) {
         void triggerAction("pause");
       } else if (hasStarted) {

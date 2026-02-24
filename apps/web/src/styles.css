@@ -312,6 +312,7 @@ select:focus {
 
 .time-controls-row {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   gap: 0.35rem;
 }
 
