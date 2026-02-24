@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  firstString,
   looksLikeDateToken,
   parseTeamsFromDisplay,
   parseKNHBMatchItem,
@@ -71,4 +75,63 @@ test("toImportedMatchMetadata maps parsed KNHB match into metadata fields", () =
   assert.equal(mapped.locationClubName, "HUDITO");
   assert.equal(mapped.fieldName, "Xpol");
   assert.equal(mapped.knhbMatchId, "m-3");
+});
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const fixturesDir = path.join(testDir, "fixtures");
+
+function readFixture(name) {
+  const raw = fs.readFileSync(path.join(fixturesDir, name), "utf8");
+  return JSON.parse(raw);
+}
+
+test("N1502 team snapshot exposes expected metadata fields", () => {
+  const payload = readFixture("knhb-team-N1502.json");
+  assert.equal(payload.status, 200);
+  assert.equal(firstString(payload, ["id"]), "N1502");
+  assert.equal(firstString(payload, ["name"]), "HUDITO H30-2");
+  assert.equal(firstString(payload, ["type"]), "Veld");
+  assert.equal(firstString(payload, ["club_name", "clubName"]), "D.H.C. Hudito");
+});
+
+test("N1502 upcoming snapshot parses into valid matches", () => {
+  const payload = readFixture("knhb-team-N1502-matches-upcoming.json");
+  const items = Array.isArray(payload.data) ? payload.data : [];
+  assert.ok(items.length > 0);
+
+  const parsed = items.map((item) => parseKNHBMatchItem(item)).filter(Boolean);
+  assert.equal(parsed.length, items.length);
+
+  for (const match of parsed) {
+    assert.ok(match.id);
+    assert.ok(match.homeTeam);
+    assert.ok(match.awayTeam);
+    assert.equal(looksLikeDateToken(match.homeTeam), false);
+    assert.equal(looksLikeDateToken(match.awayTeam), false);
+  }
+
+  assert.equal(parsed[0].id, "N1876220");
+  assert.equal(parsed[0].homeTeam, "Rotterdam H30-4");
+  assert.equal(parsed[0].awayTeam, "HUDITO H30-2");
+});
+
+test("N1502 official snapshot parses into valid matches", () => {
+  const payload = readFixture("knhb-team-N1502-matches-official.json");
+  const items = Array.isArray(payload.data) ? payload.data : [];
+  assert.ok(items.length > 0);
+
+  const parsed = items.map((item) => parseKNHBMatchItem(item)).filter(Boolean);
+  assert.equal(parsed.length, items.length);
+
+  for (const match of parsed) {
+    assert.ok(match.id);
+    assert.ok(match.homeTeam);
+    assert.ok(match.awayTeam);
+    assert.equal(looksLikeDateToken(match.homeTeam), false);
+    assert.equal(looksLikeDateToken(match.awayTeam), false);
+  }
+
+  assert.equal(parsed[0].id, "N1876215");
+  assert.equal(parsed[0].homeTeam, "HUDITO H30-2");
+  assert.equal(parsed[0].awayTeam, "Forcial H30-1");
 });

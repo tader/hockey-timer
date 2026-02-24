@@ -125,8 +125,8 @@ export function parseTeamsFromDisplay(display) {
 export function extractTeamBySide(dict, side) {
   const sideTokens =
     side === "home"
-      ? ["home", "thuis", "host", "h"]
-      : ["away", "uit", "guest", "a"];
+      ? ["home", "thuis", "host"]
+      : ["away", "uit", "guest"];
 
   /**
    * @param {unknown} value
@@ -182,14 +182,14 @@ export function parseKNHBMatchItem(item) {
   const rawHome =
     firstString(item, [
       "homeTeamName", "homeTeam", "teamhome", "teamHome", "thuisteam", "thuisTeam",
-      "thuisteamnaam", "home_team_name", "team_thuis", "thuis_team", "home_name", "home", "thuis",
+      "thuisteamnaam", "home_team_name", "team_thuis", "thuis_team", "home_team", "home_name", "home", "thuis",
     ]) ??
     extractTeamBySide(item, "home") ??
     parsedDisplay.homeTeam;
   const rawAway =
     firstString(item, [
       "awayTeamName", "awayTeam", "teamaway", "teamAway", "uitteam", "uitTeam",
-      "uitteamnaam", "away_team_name", "team_uit", "uit_team", "away_name", "away", "uit",
+      "uitteamnaam", "away_team_name", "team_uit", "uit_team", "away_team", "away_name", "away", "uit",
     ]) ??
     extractTeamBySide(item, "away") ??
     parsedDisplay.awayTeam;
