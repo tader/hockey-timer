@@ -94,7 +94,9 @@ type UIState = {
   liveNowMs: number;
   listScores: Record<string, MatchScore>;
   listScoresRefreshing: boolean;
-  matchMetadataVisible: boolean;
+  matchMenuOpen: boolean;
+  metadataModalOpen: boolean;
+  showEventStream: boolean;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -132,7 +134,9 @@ const uiState: UIState = {
   liveNowMs: Date.now(),
   listScores: {},
   listScoresRefreshing: false,
-  matchMetadataVisible: false,
+  matchMenuOpen: false,
+  metadataModalOpen: false,
+  showEventStream: true,
 };
 
 if (uiState.matches.length === 0) {
@@ -354,7 +358,35 @@ function createQuickMatch(): MatchMetadata {
   };
 }
 
-function applyImportedMatch(selected: KNHBMatch): void {
+function metadataPayload(match: MatchMetadata): Record<string, unknown> {
+  return {
+    source: match.source,
+    homeTeam: match.homeTeam,
+    awayTeam: match.awayTeam,
+    matchDateTime: match.matchDateTime ?? null,
+    location: match.locationClubName ?? null,
+    fieldName: match.fieldName ?? null,
+    knhbMatchId: match.knhbMatchId ?? null,
+    knhbSourceTeamId: match.knhbSourceTeamId ?? null,
+  };
+}
+
+async function emitMatchMetadataEvent(
+  matchId: string,
+  eventType: "match.created" | "match.metadata.updated",
+  payload: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await pushEvent(matchId, eventType, payload);
+    if (uiState.selectedMatchId === matchId && uiState.view === "match") {
+      await refreshProjection();
+    }
+  } catch {
+    // Keep local metadata updates resilient even when event transport is unavailable.
+  }
+}
+
+async function applyImportedMatch(selected: KNHBMatch): Promise<void> {
   const selectedClub = uiState.clubs.find((club) => club.id === uiState.selectedClubId);
   const importSourceTeamId = selected.sourceTeamIds?.[0] ?? uiState.selectedTeamId ?? undefined;
   const base = toImportedMatchMetadata(selected, {
@@ -362,11 +394,13 @@ function applyImportedMatch(selected: KNHBMatch): void {
     parsedDateIso: parsePossibleDate(selected.dateRaw),
     selectedClubName: selectedClub?.abbreviation ?? selectedClub?.name,
   });
+  let updatedMatch: MatchMetadata | undefined;
+  let created = false;
 
   if (uiState.importTarget === "update" && uiState.importTargetMatchId) {
     const existing = uiState.matches.find((item) => item.id === uiState.importTargetMatchId);
     if (existing) {
-      upsertMatch({
+      updatedMatch = {
         ...existing,
         source: "knhb",
         homeTeam: base.homeTeam,
@@ -376,18 +410,30 @@ function applyImportedMatch(selected: KNHBMatch): void {
         fieldName: base.fieldName,
         knhbMatchId: base.knhbMatchId,
         knhbSourceTeamId: importSourceTeamId ?? existing.knhbSourceTeamId,
-      });
+      };
+      upsertMatch(updatedMatch);
       uiState.selectedMatchId = existing.id;
     }
   } else {
-    upsertMatch({ ...base, knhbSourceTeamId: importSourceTeamId });
+    updatedMatch = { ...base, knhbSourceTeamId: importSourceTeamId };
+    upsertMatch(updatedMatch);
+    created = true;
     uiState.selectedMatchId = base.id;
   }
 
   localStorage.setItem(selectedMatchIdKey, uiState.selectedMatchId);
   uiState.events = [];
   uiState.view = "match";
+  uiState.matchMenuOpen = false;
+  uiState.metadataModalOpen = false;
   uiState.output = "KNHB metadata applied.";
+  if (updatedMatch) {
+    await emitMatchMetadataEvent(
+      updatedMatch.id,
+      created ? "match.created" : "match.metadata.updated",
+      metadataPayload(updatedMatch),
+    );
+  }
 }
 
 async function pushEvent(matchId: string, eventType: string, payload: object): Promise<void> {
@@ -794,7 +840,7 @@ async function refreshMatchMetadataFromKNHB(match: MatchMetadata): Promise<void>
     if (!found) {
       throw new Error(`KNHB match ${knhbMatchId} not found for team ${teamId}.`);
     }
-    applyImportedMatch({ ...found, sourceTeamIds: [teamId] });
+    await applyImportedMatch({ ...found, sourceTeamIds: [teamId] });
     uiState.output = `Refreshed metadata from KNHB (${knhbMatchId}).`;
   } catch (error) {
     uiState.output = (error as Error).message;
@@ -1150,79 +1196,109 @@ function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  const menu = uiState.matchMenuOpen
+    ? `
+      <div class="match-menu" role="menu">
+        <button id="openMetadataModal" class="ghost menu-item" role="menuitem">Edit Metadata</button>
+        <button id="assignFromKNHB" class="ghost menu-item" role="menuitem">Import/Assign KNHB</button>
+        <label class="menu-check">
+          <input id="toggleEventStream" type="checkbox" ${uiState.showEventStream ? "checked" : ""} />
+          <span>Show Event Stream</span>
+        </label>
+      </div>
+    `
+    : "";
   return `
     <section class="card">
       <div class="title-row">
         <button id="backToList" class="ghost">Back To Matches (Esc)</button>
-        <span class="muted">${escapeHtml(match.id)}</span>
+        <div class="row">
+          <span class="muted">${escapeHtml(match.id)}</span>
+          <div class="match-menu-anchor">
+            <button id="matchMenuButton" class="ghost kebab-button" aria-label="Match menu">⋮</button>
+            ${menu}
+          </div>
+        </div>
       </div>
       <h2>${escapeHtml(matchTitle(match))}</h2>
       <p class="muted">${escapeHtml(matchSubtitle(match) || "No metadata")}</p>
-      <div class="scoreboard">
-        <div class="team-score">
+      <div class="score-layout">
+        <div class="grid-cell score-control-top">
           <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
+        </div>
+        <div class="grid-cell center-top-controls">
+          <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
+          <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+          <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+          <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+          <button class="js-action neutral-action" data-action="previousPeriod">Prev Period <kbd>P</kbd></button>
+        </div>
+        <div class="grid-cell score-control-top">
+          <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
+        </div>
+
+        <div class="grid-cell team-score">
           <div class="team-label">Home</div>
           <div id="scoreHome" class="score-number">${local.homeScore}</div>
-          <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
         </div>
-        <div class="clock-panel">
+        <div class="grid-cell clock-panel">
           <div id="liveClock" class="clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
           <div id="liveState" class="state-pill">${stateLabel}</div>
           <div id="livePeriod" class="muted">Period ${local.currentPeriod}</div>
-          <div class="clock-controls">
-            <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
-            <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
-            <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
-            <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
-            <button class="js-action neutral-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
-            <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-            <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
-            <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
-            <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
-            <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
-            <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-            <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
-          </div>
         </div>
-        <div class="team-score">
-          <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
+        <div class="grid-cell team-score">
           <div class="team-label">Away</div>
           <div id="scoreAway" class="score-number">${local.awayScore}</div>
+        </div>
+
+        <div class="grid-cell score-control-bottom">
+          <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
+        </div>
+        <div class="grid-cell center-bottom-controls">
+          <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+          <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
+          <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
+          <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
+          <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
+          <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
+          <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
+        </div>
+        <div class="grid-cell score-control-bottom">
           <button class="js-action away-action score-action score-action-minus" data-action="awayMinus">-1 <kbd>Shift+A</kbd></button>
         </div>
       </div>
-      <section class="card">
-        <div class="title-row">
-          <h3>Match Metadata</h3>
-          <div class="row">
-            <button id="toggleMetadataEditor" class="ghost">${uiState.matchMetadataVisible ? "Hide" : "Show"}</button>
-            <button id="assignFromKNHB" class="ghost" ${uiState.matchMetadataVisible ? "" : "disabled"}>Import/Assign KNHB</button>
-          </div>
-        </div>
-        ${
-          uiState.matchMetadataVisible
-            ? `
-              <div class="filters-grid">
-                <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
-                <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
-                <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
-                <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
-                <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
-              </div>
-              <div class="row">
-                <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
-                <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
-                <button id="saveMetadata">Save Metadata</button>
-                <button id="refreshKNHBMetadata" class="ghost" ${match.knhbMatchId && match.knhbSourceTeamId ? "" : "disabled"}>Refresh KNHB Data</button>
-              </div>
-            `
-            : `<p class="muted">Metadata editor is hidden.</p>`
-        }
-      </section>
+      ${uiState.showEventStream ? `
       <h3>Events</h3>
       <div id="liveEvents" class="events-list">${renderEventsList()}</div>
+      ` : ""}
       <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
     </section>
+    ${
+      uiState.metadataModalOpen
+        ? `
+          <div class="modal-backdrop"></div>
+          <section class="card modal-card">
+            <div class="title-row">
+              <h3>Edit Match Metadata</h3>
+              <button id="closeMetadataModal" class="ghost">Close</button>
+            </div>
+            <div class="filters-grid">
+              <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
+              <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
+              <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
+              <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
+              <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
+            </div>
+            <div class="row">
+              <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
+              <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
+              <button id="saveMetadata">Save Metadata</button>
+              <button id="refreshKNHBMetadata" class="ghost" ${match.knhbMatchId && match.knhbSourceTeamId ? "" : "disabled"}>Refresh KNHB Data</button>
+            </div>
+          </section>
+        `
+        : ""
+    }
   `;
 }
 
@@ -1391,6 +1467,8 @@ function wireHandlers(): void {
       uiState.selectedMatchId = id;
       localStorage.setItem(selectedMatchIdKey, id);
       uiState.events = [];
+      uiState.matchMenuOpen = false;
+      uiState.metadataModalOpen = false;
       uiState.view = "match";
       render();
       void refreshProjection();
@@ -1401,6 +1479,8 @@ function wireHandlers(): void {
     uiState.view = "list";
     uiState.importTarget = "new";
     uiState.importTargetMatchId = undefined;
+    uiState.matchMenuOpen = false;
+    uiState.metadataModalOpen = false;
     render();
     void refreshListScores();
   });
@@ -1456,6 +1536,7 @@ function wireHandlers(): void {
   appRoot.querySelector<HTMLButtonElement>("#quickMatchList")?.addEventListener("click", () => {
     const metadata = createQuickMatch();
     upsertMatch(metadata);
+    void emitMatchMetadataEvent(metadata.id, "match.created", metadataPayload(metadata));
     uiState.selectedMatchId = metadata.id;
     localStorage.setItem(selectedMatchIdKey, metadata.id);
     uiState.events = [];
@@ -1469,10 +1550,27 @@ function wireHandlers(): void {
     render();
   });
 
-  appRoot.querySelector<HTMLButtonElement>("#toggleMetadataEditor")?.addEventListener("click", () => {
-    uiState.matchMetadataVisible = !uiState.matchMetadataVisible;
+  appRoot.querySelector<HTMLButtonElement>("#matchMenuButton")?.addEventListener("click", () => {
+    uiState.matchMenuOpen = !uiState.matchMenuOpen;
     render();
-    syncLivePanel();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#openMetadataModal")?.addEventListener("click", () => {
+    uiState.metadataModalOpen = true;
+    uiState.matchMenuOpen = false;
+    render();
+  });
+
+  appRoot.querySelector<HTMLInputElement>("#toggleEventStream")?.addEventListener("change", (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    uiState.showEventStream = target.checked;
+    uiState.matchMenuOpen = false;
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#closeMetadataModal")?.addEventListener("click", () => {
+    uiState.metadataModalOpen = false;
+    render();
   });
 
   appRoot.querySelector<HTMLButtonElement>("#modeKNHB")?.addEventListener("click", () => {
@@ -1488,6 +1586,7 @@ function wireHandlers(): void {
   appRoot.querySelector<HTMLButtonElement>("#quickMatchCreate")?.addEventListener("click", () => {
     const metadata = createQuickMatch();
     upsertMatch(metadata);
+    void emitMatchMetadataEvent(metadata.id, "match.created", metadataPayload(metadata));
     uiState.selectedMatchId = metadata.id;
     localStorage.setItem(selectedMatchIdKey, metadata.id);
     uiState.events = [];
@@ -1513,6 +1612,7 @@ function wireHandlers(): void {
       fieldName: fieldName || undefined,
     };
     upsertMatch(metadata);
+    void emitMatchMetadataEvent(metadata.id, "match.created", metadataPayload(metadata));
     uiState.selectedMatchId = metadata.id;
     uiState.view = "match";
     uiState.importTarget = "new";
@@ -1620,7 +1720,7 @@ function wireHandlers(): void {
       if (!matchId) return;
       const selected = uiState.foundMatches.find((match) => match.id === matchId);
       if (!selected) return;
-      applyImportedMatch(selected);
+      void applyImportedMatch(selected);
       render();
       void refreshProjection();
     });
@@ -1633,6 +1733,8 @@ function wireHandlers(): void {
   appRoot.querySelector<HTMLButtonElement>("#assignFromKNHB")?.addEventListener("click", () => {
     const selected = getSelectedMatch();
     if (!selected) return;
+    uiState.matchMenuOpen = false;
+    uiState.metadataModalOpen = false;
     uiState.importTarget = "update";
     uiState.importTargetMatchId = selected.id;
     uiState.view = "create";
@@ -1649,7 +1751,7 @@ function wireHandlers(): void {
     const fieldName = (appRoot.querySelector<HTMLInputElement>("#editFieldName")?.value ?? "").trim();
     const knhbMatchId = (appRoot.querySelector<HTMLInputElement>("#editKNHBMatchId")?.value ?? "").trim();
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#editDateTime")?.value ?? "";
-    upsertMatch({
+    const updatedMatch: MatchMetadata = {
       ...selected,
       homeTeam,
       awayTeam,
@@ -1658,7 +1760,11 @@ function wireHandlers(): void {
       knhbMatchId: knhbMatchId || undefined,
       knhbSourceTeamId: selected.knhbSourceTeamId,
       matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
-    });
+    };
+    upsertMatch(updatedMatch);
+    void emitMatchMetadataEvent(updatedMatch.id, "match.metadata.updated", metadataPayload(updatedMatch));
+    uiState.metadataModalOpen = false;
+    uiState.matchMenuOpen = false;
     uiState.output = "Match metadata saved.";
     render();
     syncLivePanel();
