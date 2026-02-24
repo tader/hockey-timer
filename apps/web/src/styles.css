@@ -1,71 +1,134 @@
 :root {
   font-family: "Avenir Next", "Segoe UI", sans-serif;
-  color: #0d1f2d;
-  background: #f2f6fa;
+  color: #102434;
+  background: #edf2f7;
 }
 
 body {
   margin: 0;
-  padding: 1.5rem;
+  padding: 1.2rem;
   min-height: 100vh;
-  background: #f2f6fa;
+  background: #edf2f7;
+}
+
+.app-shell {
+  max-width: 1240px;
+  margin: 0 auto;
 }
 
 h1 {
-  margin: 0;
+  margin: 0.25rem 0 0.9rem;
+  font-size: clamp(1.6rem, 2.4vw, 2rem);
+  letter-spacing: 0.01em;
 }
 
 h2,
 h3 {
-  margin: 0.2rem 0 0.8rem;
+  margin: 0.2rem 0 0.75rem;
 }
 
 button {
-  background: #0f5fa9;
+  background: #0b5ea8;
   color: #fff;
-  border: 0;
+  border: 1px solid #0b5ea8;
   border-radius: 10px;
-  padding: 0.58rem 0.85rem;
+  padding: 0.56rem 0.82rem;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
 button:hover {
-  filter: brightness(1.04);
+  background: #0a5496;
+  border-color: #0a5496;
+}
+
+button:active {
+  transform: translateY(1px);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 button.ghost {
-  background: #e7f0f8;
-  color: #17436a;
+  background: #fff;
+  color: #194568;
+  border-color: #b8ccdb;
+}
+
+button.ghost:hover {
+  background: #f2f7fb;
 }
 
 button.danger {
-  background: #b2392c;
+  background: #a8302a;
+  border-color: #a8302a;
+}
+
+button.danger:hover {
+  background: #8f2823;
+  border-color: #8f2823;
+}
+
+button.home-action {
+  background: #0b7d51;
+  border-color: #0b7d51;
+}
+
+button.home-action:hover {
+  background: #0a6f48;
+  border-color: #0a6f48;
+}
+
+button.away-action {
+  background: #8b5f0d;
+  border-color: #8b5f0d;
+}
+
+button.away-action:hover {
+  background: #79540b;
+  border-color: #79540b;
+}
+
+button.clock-action,
+button.neutral-action {
+  background: #1c6bac;
+  border-color: #1c6bac;
+}
+
+button.clock-action:hover,
+button.neutral-action:hover {
+  background: #175f99;
+  border-color: #175f99;
 }
 
 input,
 select {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #c7d4de;
+  border: 1px solid #c0cfda;
   border-radius: 10px;
-  padding: 0.56rem 0.66rem;
+  padding: 0.58rem 0.66rem;
   font: inherit;
   background: #fff;
 }
 
+input:focus,
+select:focus {
+  outline: 2px solid #70a9d8;
+  outline-offset: 1px;
+  border-color: #70a9d8;
+}
+
 .card {
   background: #fff;
-  border: 1px solid #d4dfe6;
+  border: 1px solid #d0dce6;
   border-radius: 14px;
   padding: 1rem;
   margin-top: 1rem;
-  box-shadow: 0 6px 20px rgba(14, 31, 45, 0.06);
+  box-shadow: 0 8px 24px rgba(15, 37, 58, 0.06);
 }
 
 .title-row {
@@ -77,27 +140,35 @@ select {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(8rem, 1fr));
+  grid-template-columns: repeat(6, minmax(8rem, 1fr));
   gap: 0.45rem;
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.75rem;
 }
 
 .table-wrap {
   overflow: auto;
   border-radius: 12px;
-  border: 1px solid #d7e2ea;
+  border: 1px solid #d5e0e8;
+  max-height: 65vh;
 }
 
 .matches-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 50rem;
+  min-width: 62rem;
+}
+
+.matches-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f1f6fa;
 }
 
 .matches-table th,
 .matches-table td {
-  border-bottom: 1px solid #e3ecf2;
-  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid #e2ebf2;
+  padding: 0.6rem 0.65rem;
   text-align: left;
   white-space: nowrap;
 }
@@ -106,15 +177,36 @@ select {
   cursor: pointer;
 }
 
+.matches-table tbody tr:nth-child(2n) {
+  background: #fbfdff;
+}
+
 .matches-table tbody tr:hover {
-  background: #f0f6fb;
+  background: #e9f3fb;
 }
 
 .table-sort {
   background: transparent;
-  color: #17436a;
+  color: #17486f;
   padding: 0;
+  border: 0;
   border-radius: 0;
+}
+
+.score-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.score-pill {
+  display: inline-block;
+  min-width: 4.2rem;
+  text-align: center;
+  border-radius: 999px;
+  background: #ecf4fb;
+  color: #143f63;
+  border: 1px solid #c7daea;
+  padding: 0.14rem 0.56rem;
+  font-weight: 700;
 }
 
 .scoreboard {
@@ -127,7 +219,7 @@ select {
 
 .team-score,
 .clock-panel {
-  border: 1px solid #d2dee8;
+  border: 1px solid #cfdde8;
   border-radius: 14px;
   background: #f7fbff;
   display: grid;
@@ -136,29 +228,33 @@ select {
 }
 
 .team-label {
-  color: #46627a;
-  font-size: 0.9rem;
+  color: #456279;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .score-number {
-  font-size: clamp(2.6rem, 8vw, 5.5rem);
+  font-size: clamp(2.8rem, 8vw, 5.9rem);
   line-height: 1;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .clock {
-  font-size: clamp(2.2rem, 6vw, 4.4rem);
+  font-size: clamp(2.2rem, 6vw, 4.6rem);
   line-height: 1;
-  font-weight: 800;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 
 .state-pill {
-  margin-top: 0.4rem;
+  margin-top: 0.45rem;
   background: #deedf8;
-  color: #1b4e79;
+  color: #1d507b;
   border-radius: 999px;
-  padding: 0.2rem 0.7rem;
-  font-weight: 700;
+  padding: 0.22rem 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 .control-grid {
@@ -169,14 +265,14 @@ select {
 }
 
 kbd {
-  margin-left: 0.35rem;
-  font-size: 0.72rem;
-  border: 1px solid #aac2d8;
+  margin-left: 0.34rem;
+  font-size: 0.7rem;
+  border: 1px solid #a7bfd4;
   border-bottom-width: 2px;
   border-radius: 6px;
-  padding: 0.04rem 0.35rem;
-  background: #f6fbff;
-  color: #17436a;
+  padding: 0.05rem 0.34rem;
+  background: #f3f8fd;
+  color: #17496f;
 }
 
 .row {
@@ -201,7 +297,8 @@ kbd {
 }
 
 .club-results button.selected {
-  border: 1px solid #0d5ea8;
+  border-color: #0d5ea8;
+  box-shadow: inset 0 0 0 1px #0d5ea8;
 }
 
 .found-match {
@@ -228,13 +325,13 @@ kbd {
 }
 
 .muted {
-  color: #5c7284;
-  font-size: 0.85rem;
+  color: #5a7285;
+  font-size: 0.84rem;
 }
 
 pre {
   margin-top: 0.75rem;
-  background: #eff6fb;
+  background: #edf5fb;
   border-radius: 10px;
   padding: 0.75rem;
   white-space: pre-wrap;
@@ -244,13 +341,13 @@ pre {
   color: #b00020;
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .filters-grid {
-    grid-template-columns: repeat(2, minmax(8rem, 1fr));
+    grid-template-columns: repeat(3, minmax(8rem, 1fr));
   }
 
   .matches-table {
-    min-width: 40rem;
+    min-width: 48rem;
   }
 
   .scoreboard {
@@ -260,10 +357,14 @@ pre {
 
 @media (max-width: 700px) {
   body {
-    padding: 1rem;
+    padding: 0.85rem;
   }
 
   .filters-grid {
     grid-template-columns: 1fr;
+  }
+
+  .control-grid {
+    grid-template-columns: repeat(2, minmax(8rem, 1fr));
   }
 }

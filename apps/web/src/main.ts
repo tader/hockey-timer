@@ -1055,6 +1055,7 @@ function renderListView(): string {
         <h2>Matches</h2>
         <div class="row">
           <span class="muted">${rows.length} shown</span>
+          <button id="clearFilters" class="ghost">Clear Filters</button>
           <button id="newMatch">New Match</button>
           <button id="quickMatchList" class="ghost">Quick Match</button>
         </div>
@@ -1089,9 +1090,9 @@ function renderListView(): string {
               <tr class="js-open-match" data-match-id="${escapeHtml(match.id)}">
                 <td>${escapeHtml(match.homeTeam)}</td>
                 <td>${escapeHtml(match.awayTeam)}</td>
-                <td>${
+                <td class="score-cell">${
                   uiState.listScores[match.id]
-                    ? `${uiState.listScores[match.id].homeScore} - ${uiState.listScores[match.id].awayScore}`
+                    ? `<span class="score-pill">${uiState.listScores[match.id].homeScore} - ${uiState.listScores[match.id].awayScore}</span>`
                     : "-"
                 }</td>
                 <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
@@ -1171,22 +1172,22 @@ function renderMatchView(match: MatchMetadata): string {
         </div>
       </div>
       <div class="control-grid">
-        <button class="js-action" data-action="start">Start <kbd>S</kbd></button>
-        <button class="js-action" data-action="pause">Pause <kbd>Space</kbd></button>
-        <button class="js-action" data-action="resume">Resume <kbd>Space</kbd></button>
-        <button class="js-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
-        <button class="js-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
-        <button class="js-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-        <button class="js-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
-        <button class="js-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
-        <button class="js-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
-        <button class="js-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
+        <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
+        <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+        <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+        <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+        <button class="js-action neutral-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
+        <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+        <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
+        <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
+        <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
+        <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
+        <button class="js-action home-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
+        <button class="js-action away-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
+        <button class="js-action home-action" data-action="homeMinus">Home -1 <kbd>Shift+H</kbd></button>
+        <button class="js-action away-action" data-action="awayMinus">Away -1 <kbd>Shift+A</kbd></button>
         <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-        <button class="js-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
-        <button class="js-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
-        <button class="js-action" data-action="homeMinus">Home -1 <kbd>Shift+H</kbd></button>
-        <button class="js-action" data-action="awayMinus">Away -1 <kbd>Shift+A</kbd></button>
-        <button id="poll">Refresh <kbd>R</kbd></button>
+        <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
       </div>
       <section class="card">
         <div class="title-row">
@@ -1223,8 +1224,10 @@ function render(): void {
       : renderListView();
 
   appRoot.innerHTML = `
-    <h1>Hockey Timer</h1>
-    ${body}
+    <div class="app-shell">
+      <h1>Hockey Timer</h1>
+      ${body}
+    </div>
   `;
   wireHandlers();
 }
@@ -1426,6 +1429,17 @@ function wireHandlers(): void {
     uiState.importTarget = "new";
     uiState.importTargetMatchId = undefined;
     render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#clearFilters")?.addEventListener("click", () => {
+    uiState.filterTeam = "";
+    uiState.filterHome = "";
+    uiState.filterAway = "";
+    uiState.filterClub = "";
+    uiState.filterField = "";
+    uiState.filterSource = "all";
+    render();
+    void refreshListScores();
   });
 
   appRoot.querySelector<HTMLButtonElement>("#quickMatchList")?.addEventListener("click", () => {
