@@ -1267,6 +1267,7 @@ function renderMatchView(match: MatchMetadata): string {
   const menu = uiState.matchMenuOpen
     ? `
       <div class="match-menu" role="menu">
+        <button id="refreshMenu" class="ghost menu-item" role="menuitem">Refresh <kbd>R</kbd></button>
         <button id="openMetadataModal" class="ghost menu-item" role="menuitem">Edit Metadata</button>
         <button id="assignFromKNHB" class="ghost menu-item" role="menuitem">Import/Assign KNHB</button>
         <button id="toggleFullscreen" class="ghost menu-item" role="menuitem">${fullscreenLabel}</button>
@@ -1304,11 +1305,15 @@ function renderMatchView(match: MatchMetadata): string {
                 <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
               </div>
               <div class="grid-cell center-top-controls">
-                <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
-                <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
-                <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
-                <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
-                <button class="js-action neutral-action" data-action="previousPeriod">Prev Period <kbd>P</kbd></button>
+                <div class="time-controls-row two-cols">
+                  <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
+                  <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+                </div>
+                <div class="time-controls-row three-cols">
+                  <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
+                  <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+                  <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+                </div>
               </div>
               <div class="grid-cell score-control-top">
                 <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
@@ -1337,13 +1342,16 @@ function renderMatchView(match: MatchMetadata): string {
                 <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
               </div>
               <div class="grid-cell center-bottom-controls">
-                <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-                <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
-                <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
-                <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
-                <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
-                <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-                <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
+                <div class="time-controls-row three-cols">
+                  <button class="js-action clock-action" data-action="endPeriod">+ Period <kbd>E</kbd></button>
+                  <button class="js-action clock-action" data-action="clockPlus60">+ 1:00 <kbd>.</kbd></button>
+                  <button class="js-action clock-action" data-action="clockPlus10">+ 0:10 <kbd>&gt;</kbd></button>
+                </div>
+                <div class="time-controls-row three-cols">
+                  <button class="js-action clock-action" data-action="previousPeriod">- Period <kbd>P</kbd></button>
+                  <button class="js-action clock-action" data-action="clockMinus60">- 1:00 <kbd>,</kbd></button>
+                  <button class="js-action clock-action" data-action="clockMinus10">- 0:10 <kbd>&lt;</kbd></button>
+                </div>
               </div>
               <div class="grid-cell score-control-bottom">
                 <button class="js-action away-action score-action score-action-minus" data-action="awayMinus">-1 <kbd>Shift+A</kbd></button>
@@ -1870,7 +1878,9 @@ function wireHandlers(): void {
     });
   });
 
-  appRoot.querySelector<HTMLButtonElement>("#poll")?.addEventListener("click", () => {
+  appRoot.querySelector<HTMLButtonElement>("#refreshMenu")?.addEventListener("click", () => {
+    uiState.matchMenuOpen = false;
+    render();
     void refreshProjection();
   });
 

@@ -297,8 +297,8 @@ select:focus {
 .center-top-controls,
 .center-bottom-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(7rem, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
   align-content: center;
 }
 
@@ -308,6 +308,19 @@ select:focus {
 
 .center-bottom-controls {
   align-self: start;
+}
+
+.time-controls-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.time-controls-row.two-cols {
+  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+}
+
+.time-controls-row.three-cols {
+  grid-template-columns: repeat(3, minmax(7rem, 1fr));
 }
 
 .score-layout.scoreboard-mode {
@@ -567,7 +580,18 @@ pre {
 
   .center-top-controls,
   .center-bottom-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .time-controls-row.three-cols {
     grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .time-controls-row.two-cols,
+  .time-controls-row.three-cols {
+    grid-template-columns: 1fr;
   }
 }
 
