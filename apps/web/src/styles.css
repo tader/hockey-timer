@@ -28,9 +28,9 @@ h3 {
 }
 
 button {
-  background: #0b5ea8;
+  background: #3f79a4;
   color: #fff;
-  border: 1px solid #0b5ea8;
+  border: 1px solid #3f79a4;
   border-radius: 10px;
   padding: 0.56rem 0.82rem;
   cursor: pointer;
@@ -39,8 +39,8 @@ button {
 }
 
 button:hover {
-  background: #0a5496;
-  border-color: #0a5496;
+  background: #376f99;
+  border-color: #376f99;
 }
 
 button:active {
@@ -63,51 +63,51 @@ button.ghost:hover {
 }
 
 button.danger {
-  background: #a8302a;
-  border-color: #a8302a;
+  background: #ad4943;
+  border-color: #ad4943;
 }
 
 button.danger:hover {
-  background: #8f2823;
-  border-color: #8f2823;
+  background: #9c413c;
+  border-color: #9c413c;
 }
 
 button.home-action {
-  background: #0b7d51;
-  border-color: #0b7d51;
+  background: #4a7ea4;
+  border-color: #4a7ea4;
 }
 
 button.home-action:hover {
-  background: #0a6f48;
-  border-color: #0a6f48;
+  background: #417395;
+  border-color: #417395;
 }
 
 button.away-action {
-  background: #8b5f0d;
-  border-color: #8b5f0d;
+  background: #4a7ea4;
+  border-color: #4a7ea4;
 }
 
 button.away-action:hover {
-  background: #79540b;
-  border-color: #79540b;
+  background: #417395;
+  border-color: #417395;
 }
 
 button.clock-action,
 button.neutral-action {
-  background: #1c6bac;
-  border-color: #1c6bac;
+  background: #4b7da6;
+  border-color: #4b7da6;
 }
 
 button.clock-action:hover,
 button.neutral-action:hover {
-  background: #175f99;
-  border-color: #175f99;
+  background: #427398;
+  border-color: #427398;
 }
 
 button.period-advance-highlight,
 button.period-advance-highlight:hover {
-  background: #a8302a;
-  border-color: #a8302a;
+  background: #ad4943;
+  border-color: #ad4943;
   color: #fff;
 }
 
