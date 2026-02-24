@@ -280,7 +280,8 @@ select:focus {
 
 .team-name {
   color: #2d4f6b;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
+  font-weight: 700;
   text-align: center;
 }
 
