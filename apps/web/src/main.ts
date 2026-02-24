@@ -1213,10 +1213,10 @@ function renderMatchView(match: MatchMetadata): string {
         <button class="js-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
         <button class="js-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
         <button class="js-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-        <button class="js-action" data-action="clockMinus60">-60s <kbd>-</kbd></button>
-        <button class="js-action" data-action="clockMinus10">-10s <kbd>,</kbd></button>
-        <button class="js-action" data-action="clockPlus10">+10s <kbd>.</kbd></button>
-        <button class="js-action" data-action="clockPlus60">+60s <kbd>=</kbd></button>
+        <button class="js-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
+        <button class="js-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
+        <button class="js-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
+        <button class="js-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
         <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
         <button class="js-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
         <button class="js-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
@@ -1386,10 +1386,10 @@ function initKeyboardShortcuts(): void {
     if (key === "p") void triggerAction("previousPeriod");
     if (key === "m") void triggerAction("endMatch");
     if (event.key === "0") void triggerAction("clockReset");
-    if (event.key === "-") void triggerAction("clockMinus60");
-    if (event.key === ",") void triggerAction("clockMinus10");
-    if (event.key === ".") void triggerAction("clockPlus10");
-    if (event.key === "=" || event.key === "+") void triggerAction("clockPlus60");
+    if ((event.key === "," && !event.shiftKey)) void triggerAction("clockMinus60");
+    if ((event.key === "." && !event.shiftKey)) void triggerAction("clockPlus60");
+    if (event.key === "<" || (event.key === "," && event.shiftKey)) void triggerAction("clockMinus10");
+    if (event.key === ">" || (event.key === "." && event.shiftKey)) void triggerAction("clockPlus10");
     if (key === "h") void triggerAction(event.shiftKey ? "homeMinus" : "homePlus");
     if (key === "a") void triggerAction(event.shiftKey ? "awayMinus" : "awayPlus");
   });
