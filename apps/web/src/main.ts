@@ -377,7 +377,7 @@ function metadataPayload(match: MatchMetadata): Record<string, unknown> {
 
 async function emitMatchMetadataEvent(
   matchId: string,
-  eventType: "match.created" | "match.metadata.updated",
+  eventType: "match.created" | "match.updated",
   payload: Record<string, unknown>,
 ): Promise<void> {
   try {
@@ -434,7 +434,7 @@ async function applyImportedMatch(selected: KNHBMatch): Promise<void> {
   if (updatedMatch) {
     await emitMatchMetadataEvent(
       updatedMatch.id,
-      created ? "match.created" : "match.metadata.updated",
+      created ? "match.created" : "match.updated",
       metadataPayload(updatedMatch),
     );
   }
@@ -1905,7 +1905,7 @@ function wireHandlers(): void {
       matchDateTime: dateTimeRaw ? new Date(dateTimeRaw).toISOString() : undefined,
     };
     upsertMatch(updatedMatch);
-    void emitMatchMetadataEvent(updatedMatch.id, "match.metadata.updated", metadataPayload(updatedMatch));
+    void emitMatchMetadataEvent(updatedMatch.id, "match.updated", metadataPayload(updatedMatch));
     uiState.metadataModalOpen = false;
     uiState.matchMenuOpen = false;
     uiState.output = "Match metadata saved.";
