@@ -541,6 +541,12 @@ pre {
   white-space: pre-wrap;
 }
 
+.status-line {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 .overrun {
   color: #b00020;
 }

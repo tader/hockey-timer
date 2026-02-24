@@ -1354,7 +1354,7 @@ function renderMatchView(match: MatchMetadata): string {
       <h3>Events</h3>
       <div id="liveEvents" class="events-list">${renderEventsList()}</div>
       ` : ""}
-      <pre id="liveOutput">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</pre>
+      <div id="liveOutput" class="status-line muted">${escapeHtml(uiState.loading ? "Loading..." : uiState.output)}</div>
     </section>
     ${
       uiState.metadataModalOpen
