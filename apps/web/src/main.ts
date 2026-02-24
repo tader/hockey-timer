@@ -656,6 +656,22 @@ function hasMatchStarted(events: MatchEvent[]): boolean {
   ));
 }
 
+function primaryClockControlState(local: LocalProjection, events: MatchEvent[]): {
+  action?: "start" | "pause" | "resume";
+  label: string;
+  hotkey: string;
+  cssClass: "danger" | "neutral-action";
+  canEndMatch: boolean;
+} {
+  const matchStarted = hasMatchStarted(events);
+  const action = local.isEnded ? undefined : local.isRunning ? "pause" : matchStarted ? "resume" : "start";
+  const label = local.isEnded ? "Match Ended" : local.isRunning ? "Pause" : matchStarted ? "Resume" : "Start";
+  const hotkey = local.isRunning || matchStarted ? "Space" : "S";
+  const cssClass = local.isRunning ? "danger" : "neutral-action";
+  const canEndMatch = !local.isRunning && !local.isEnded && matchStarted;
+  return { action, label, hotkey, cssClass, canEndMatch };
+}
+
 function renderEventsList(): string {
   if (uiState.events.length === 0) {
     return `<div class="muted">No events yet</div>`;
@@ -1222,14 +1238,9 @@ function renderCreateView(): string {
 
 function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
-  const matchStarted = hasMatchStarted(uiState.events);
+  const control = primaryClockControlState(local, uiState.events);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
-  const primaryAction = local.isEnded ? undefined : local.isRunning ? "pause" : matchStarted ? "resume" : "start";
-  const primaryLabel = local.isEnded ? "Match Ended" : local.isRunning ? "Pause" : matchStarted ? "Resume" : "Start";
-  const primaryHotkey = local.isRunning || matchStarted ? "Space" : "S";
-  const primaryClass = local.isRunning ? "danger" : "neutral-action";
-  const canEndMatch = !local.isRunning && !local.isEnded && matchStarted;
   const shortcutsModal = uiState.showShortcutsModal
     ? `
       <div class="modal-backdrop"></div>
@@ -1321,10 +1332,10 @@ function renderMatchView(match: MatchMetadata): string {
               </div>
               <div class="grid-cell center-top-controls">
                 <div class="time-controls-row">
-                  <button class="js-action ${primaryClass}" data-action="${primaryAction ?? ""}" ${primaryAction ? "" : "disabled"}>${primaryLabel} <kbd>${primaryHotkey}</kbd></button>
+                  <button id="primaryClockAction" class="js-action ${control.cssClass}" data-action="${control.action ?? ""}" ${control.action ? "" : "disabled"}>${control.label} <kbd>${control.hotkey}</kbd></button>
                 </div>
                 <div class="time-controls-row">
-                  ${canEndMatch ? `<button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>` : ""}
+                  <button id="endMatchAction" class="js-action danger" data-action="endMatch" ${control.canEndMatch ? "" : "hidden"}>End Match <kbd>M</kbd></button>
                   <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
                 </div>
               </div>
@@ -1436,6 +1447,7 @@ function syncLivePanel(): void {
   if (!selectedMatch || uiState.view !== "match") return;
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
   const timer = timerFromLocalProjection(local);
+  const control = primaryClockControlState(local, uiState.events);
   const scoreHome = appRoot.querySelector<HTMLElement>("#scoreHome");
   const scoreAway = appRoot.querySelector<HTMLElement>("#scoreAway");
   const state = appRoot.querySelector<HTMLElement>("#liveState");
@@ -1443,6 +1455,8 @@ function syncLivePanel(): void {
   const clock = appRoot.querySelector<HTMLElement>("#liveClock");
   const output = appRoot.querySelector<HTMLElement>("#liveOutput");
   const events = appRoot.querySelector<HTMLElement>("#liveEvents");
+  const primaryClockAction = appRoot.querySelector<HTMLButtonElement>("#primaryClockAction");
+  const endMatchAction = appRoot.querySelector<HTMLButtonElement>("#endMatchAction");
 
   if (scoreHome) scoreHome.textContent = String(local.homeScore);
   if (scoreAway) scoreAway.textContent = String(local.awayScore);
@@ -1451,6 +1465,16 @@ function syncLivePanel(): void {
   if (clock) {
     clock.textContent = timer.label;
     clock.classList.toggle("overrun", timer.isOverrun);
+  }
+  if (primaryClockAction) {
+    primaryClockAction.classList.toggle("danger", control.cssClass === "danger");
+    primaryClockAction.classList.toggle("neutral-action", control.cssClass === "neutral-action");
+    primaryClockAction.disabled = !control.action;
+    primaryClockAction.dataset.action = control.action ?? "";
+    primaryClockAction.innerHTML = `${control.label} <kbd>${control.hotkey}</kbd>`;
+  }
+  if (endMatchAction) {
+    endMatchAction.hidden = !control.canEndMatch;
   }
   if (output) output.textContent = uiState.loading ? "Loading..." : uiState.output;
   if (events) events.innerHTML = renderEventsList();

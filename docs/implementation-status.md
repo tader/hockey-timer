@@ -54,6 +54,11 @@
 - Android delivery is intentionally paused while Apple stack is finalized.
 - Delivery rule active: implement new features in web first, then iOS/watch with parity.
 
+## Recent Bug Findings
+- Web match-view primary clock control could appear stale (for example showing `Start` while clock was running).
+- Root cause: `refreshProjection()` updated live clock/score via `syncLivePanel()`, but button label/class/action visibility were previously only computed during full `render()`.
+- Fix: sync logic now updates primary clock button (`Start`/`Pause`/`Resume`) and paused-only `End Match` visibility directly from the latest replayed state.
+
 ## Next Priorities
 1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.
 2. Expand integration tests (cross-workspace end-to-end) on top of current unit coverage.
