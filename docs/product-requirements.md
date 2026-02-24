@@ -101,8 +101,6 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - duration per period (minutes; applied uniformly across all periods)
 - In web match view, show home/away team names below their scores when concrete team names are known (not placeholder labels).
 - These score-side team names should use slightly larger, bolder text than standard muted metadata labels.
-- In web match view, home and away score-adjustment buttons should use the same color treatment.
-- Web button palette should be slightly less visually aggressive while still clearly active (must not resemble disabled controls).
 - Match list should show match date (local, Europe/Amsterdam).
 - Match list should sort newest-first (based on match date/time, fallback to creation time).
 - Match list should support filtering by:
