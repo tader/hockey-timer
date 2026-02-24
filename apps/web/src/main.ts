@@ -162,26 +162,13 @@ function matchSubtitle(match: MatchMetadata): string {
       parts.push(formatted);
     }
   }
-  if (match.locationClubName && !isAtHomeLocation(match)) {
+  if (match.locationClubName) {
     parts.push(match.locationClubName);
   }
   if (match.fieldName) {
     parts.push(match.fieldName);
   }
   return parts.join(" • ");
-}
-
-function inferHomeClubFromTeamName(homeTeam: string): string | undefined {
-  const token = homeTeam.trim().split(/\s+/)[0];
-  if (!token) return undefined;
-  return token.replace(/[^A-Za-z0-9-]/g, "").toLowerCase();
-}
-
-function isAtHomeLocation(match: MatchMetadata): boolean {
-  if (!match.locationClubName) return true;
-  const inferred = inferHomeClubFromTeamName(match.homeTeam);
-  if (!inferred) return false;
-  return match.locationClubName.toLowerCase() === inferred;
 }
 
 function sortedMatches(matches: MatchMetadata[]): MatchMetadata[] {
@@ -962,7 +949,7 @@ function renderListView(): string {
       <div class="filters-grid">
         <input id="filterHome" placeholder="Filter home" value="${escapeHtml(uiState.filterHome)}" />
         <input id="filterAway" placeholder="Filter away" value="${escapeHtml(uiState.filterAway)}" />
-        <input id="filterClub" placeholder="Filter location club" value="${escapeHtml(uiState.filterClub)}" />
+        <input id="filterClub" placeholder="Filter location" value="${escapeHtml(uiState.filterClub)}" />
         <input id="filterField" placeholder="Filter field" value="${escapeHtml(uiState.filterField)}" />
         <input id="filterSource" placeholder="Filter source" value="${escapeHtml(uiState.filterSource)}" />
       </div>
@@ -973,7 +960,7 @@ function renderListView(): string {
               <th><button class="table-sort js-sort" data-field="homeTeam">Home</button></th>
               <th><button class="table-sort js-sort" data-field="awayTeam">Away</button></th>
               <th><button class="table-sort js-sort" data-field="matchDateTime">Date</button></th>
-              <th><button class="table-sort js-sort" data-field="locationClubName">Location Club</button></th>
+              <th><button class="table-sort js-sort" data-field="locationClubName">Location</button></th>
               <th><button class="table-sort js-sort" data-field="fieldName">Field</button></th>
               <th><button class="table-sort js-sort" data-field="source">Source</button></th>
             </tr>
@@ -984,7 +971,7 @@ function renderListView(): string {
                 <td>${escapeHtml(match.homeTeam)}</td>
                 <td>${escapeHtml(match.awayTeam)}</td>
                 <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
-                <td>${escapeHtml(isAtHomeLocation(match) ? "" : (match.locationClubName ?? ""))}</td>
+                <td>${escapeHtml(match.locationClubName ?? "")}</td>
                 <td>${escapeHtml(match.fieldName ?? "")}</td>
                 <td>${escapeHtml(match.source)}</td>
               </tr>
@@ -1020,7 +1007,7 @@ function renderCreateView(): string {
             <div class="stack">
               <input id="createHome" type="text" placeholder="Home team" />
               <input id="createAway" type="text" placeholder="Away team" />
-              <input id="createLocationClub" type="text" placeholder="Location club (optional)" />
+              <input id="createLocationClub" type="text" placeholder="Location (optional)" />
               <input id="createFieldName" type="text" placeholder="Field name (optional)" />
               <label for="createDateTime">Match date/time</label>
               <input id="createDateTime" type="datetime-local" />
@@ -1086,7 +1073,7 @@ function renderMatchView(match: MatchMetadata): string {
         <div class="filters-grid">
           <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
           <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
-          <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location club" />
+          <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
           <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
           <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
         </div>

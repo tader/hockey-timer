@@ -113,6 +113,7 @@ test("N1502 upcoming snapshot parses into valid matches", () => {
   assert.equal(parsed[0].id, "N1876220");
   assert.equal(parsed[0].homeTeam, "Rotterdam H30-4");
   assert.equal(parsed[0].awayTeam, "HUDITO H30-2");
+  assert.equal(parsed[0].locationClubName, "Sportpark Hazelaarweg");
 });
 
 test("N1502 official snapshot parses into valid matches", () => {
@@ -134,4 +135,5 @@ test("N1502 official snapshot parses into valid matches", () => {
   assert.equal(parsed[0].id, "N1876215");
   assert.equal(parsed[0].homeTeam, "HUDITO H30-2");
   assert.equal(parsed[0].awayTeam, "Forcial H30-1");
+  assert.equal(parsed[0].locationClubName, "Sportpark 'Kruithuisweg'");
 });

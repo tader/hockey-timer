@@ -31,6 +31,7 @@ Import/reference match metadata from KNHB Match Center so users can select upcom
   - Guard against malformed payloads where timestamp values appear in team fields; treat timestamp-like values as invalid team names.
 - Match metadata persistence:
   - Persist `homeTeam`, `awayTeam`, and `knhbMatchId` for imported matches.
+  - Persist `Location` from `match.location.description` when present.
 - Team favorites:
   - Users can mark/unmark KNHB teams as favorites.
   - Favorites are stored locally per device for quick team re-selection.

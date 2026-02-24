@@ -203,7 +203,13 @@ export function parseKNHBMatchItem(item) {
     "date", "datum", "startDateTime", "start", "starttime", "starttijd", "aanvang", "aanvangstijd",
     "plannedStart", "beginDateTime", "speeldatum", "datetime",
   ]);
-  const locationClubName = firstString(item, [
+  const rawLocation = /** @type {Record<string, unknown>|undefined} */ (
+    item.location && typeof item.location === "object" ? item.location : undefined
+  );
+  const locationDescription = rawLocation
+    ? firstString(rawLocation, ["description", "omschrijving"])
+    : undefined;
+  const locationClubName = locationDescription ?? firstString(item, [
     "locationClub", "club", "clubnaam", "location", "speellocatie", "accommodatie", "venueClub",
   ]);
   const fieldName = firstString(item, [
