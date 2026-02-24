@@ -1011,7 +1011,6 @@ function renderListView(): string {
               <th><button class="table-sort js-sort" data-field="matchDateTime">Date</button></th>
               <th><button class="table-sort js-sort" data-field="locationClubName">Location</button></th>
               <th><button class="table-sort js-sort" data-field="fieldName">Field</button></th>
-              <th><button class="table-sort js-sort" data-field="source">Source</button></th>
             </tr>
           </thead>
           <tbody>
@@ -1022,7 +1021,6 @@ function renderListView(): string {
                 <td>${escapeHtml(formatAmsterdamDate(match.matchDateTime ?? match.createdAt) ?? "Unknown")}</td>
                 <td>${escapeHtml(match.locationClubName ?? "")}</td>
                 <td>${escapeHtml(match.fieldName ?? "")}</td>
-                <td>${escapeHtml(match.source)}</td>
               </tr>
             `).join("")}
           </tbody>
