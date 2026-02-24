@@ -1,15 +1,14 @@
 :root {
   font-family: "Avenir Next", "Segoe UI", sans-serif;
   color: #0d1f2d;
-  background:
-    radial-gradient(circle at 10% 10%, #e6f0fa, transparent 35%),
-    radial-gradient(circle at 85% 20%, #f5eadb, transparent 30%),
-    #f7fafc;
+  background: #f2f6fa;
 }
 
 body {
   margin: 0;
   padding: 1.5rem;
+  min-height: 100vh;
+  background: #f2f6fa;
 }
 
 h1 {
