@@ -82,9 +82,10 @@ type UIState = {
   sortDirection: "asc" | "desc";
   filterHome: string;
   filterAway: string;
+  filterTeam: string;
   filterClub: string;
   filterField: string;
-  filterSource: string;
+  filterSource: "all" | "web-custom" | "knhb" | "local";
   liveNowMs: number;
 };
 
@@ -116,9 +117,10 @@ const uiState: UIState = {
   sortDirection: "desc",
   filterHome: "",
   filterAway: "",
+  filterTeam: "",
   filterClub: "",
   filterField: "",
-  filterSource: "",
+  filterSource: "all",
   liveNowMs: Date.now(),
 };
 
@@ -762,16 +764,22 @@ function filteredSortedMatches(): MatchMetadata[] {
   const normalized = {
     home: uiState.filterHome.trim().toLowerCase(),
     away: uiState.filterAway.trim().toLowerCase(),
+    team: uiState.filterTeam.trim().toLowerCase(),
     club: uiState.filterClub.trim().toLowerCase(),
     field: uiState.filterField.trim().toLowerCase(),
-    source: uiState.filterSource.trim().toLowerCase(),
+    source: uiState.filterSource,
   };
   const filtered = uiState.matches.filter((match) => {
     if (normalized.home && !match.homeTeam.toLowerCase().includes(normalized.home)) return false;
     if (normalized.away && !match.awayTeam.toLowerCase().includes(normalized.away)) return false;
+    if (
+      normalized.team &&
+      !match.homeTeam.toLowerCase().includes(normalized.team) &&
+      !match.awayTeam.toLowerCase().includes(normalized.team)
+    ) return false;
     if (normalized.club && !(match.locationClubName ?? "").toLowerCase().includes(normalized.club)) return false;
     if (normalized.field && !(match.fieldName ?? "").toLowerCase().includes(normalized.field)) return false;
-    if (normalized.source && !match.source.toLowerCase().includes(normalized.source)) return false;
+    if (normalized.source !== "all" && match.source !== normalized.source) return false;
     return true;
   });
   const direction = uiState.sortDirection === "asc" ? 1 : -1;
@@ -996,11 +1004,17 @@ function renderListView(): string {
         </div>
       </div>
       <div class="filters-grid">
+        <input id="filterTeam" placeholder="Filter team (home/away)" value="${escapeHtml(uiState.filterTeam)}" />
         <input id="filterHome" placeholder="Filter home" value="${escapeHtml(uiState.filterHome)}" />
         <input id="filterAway" placeholder="Filter away" value="${escapeHtml(uiState.filterAway)}" />
         <input id="filterClub" placeholder="Filter location" value="${escapeHtml(uiState.filterClub)}" />
         <input id="filterField" placeholder="Filter field" value="${escapeHtml(uiState.filterField)}" />
-        <input id="filterSource" placeholder="Filter source" value="${escapeHtml(uiState.filterSource)}" />
+        <select id="filterSource">
+          <option value="all" ${uiState.filterSource === "all" ? "selected" : ""}>All sources</option>
+          <option value="knhb" ${uiState.filterSource === "knhb" ? "selected" : ""}>KNHB</option>
+          <option value="web-custom" ${uiState.filterSource === "web-custom" ? "selected" : ""}>Web custom</option>
+          <option value="local" ${uiState.filterSource === "local" ? "selected" : ""}>Local</option>
+        </select>
       </div>
       <div class="table-wrap">
         <table class="matches-table">
@@ -1325,11 +1339,11 @@ function wireHandlers(): void {
   });
 
   for (const [id, key] of [
+    ["filterTeam", "filterTeam"],
     ["filterHome", "filterHome"],
     ["filterAway", "filterAway"],
     ["filterClub", "filterClub"],
     ["filterField", "filterField"],
-    ["filterSource", "filterSource"],
   ] as const) {
     const input = appRoot.querySelector<HTMLInputElement>(`#${id}`);
     input?.addEventListener("input", () => {
@@ -1337,6 +1351,12 @@ function wireHandlers(): void {
       renderWithInputFocus(id, input.selectionStart, input.selectionEnd);
     });
   }
+
+  const sourceSelect = appRoot.querySelector<HTMLSelectElement>("#filterSource");
+  sourceSelect?.addEventListener("change", () => {
+    uiState.filterSource = (sourceSelect.value as UIState["filterSource"]) ?? "all";
+    render();
+  });
 
   appRoot.querySelector<HTMLButtonElement>("#newMatch")?.addEventListener("click", () => {
     uiState.view = "create";
