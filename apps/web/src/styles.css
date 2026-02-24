@@ -83,13 +83,13 @@ button.home-action:hover {
 }
 
 button.away-action {
-  background: #8b5f0d;
-  border-color: #8b5f0d;
+  background: #0b7d51;
+  border-color: #0b7d51;
 }
 
 button.away-action:hover {
-  background: #79540b;
-  border-color: #79540b;
+  background: #0a6f48;
+  border-color: #0a6f48;
 }
 
 button.clock-action,
