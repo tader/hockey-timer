@@ -1198,6 +1198,24 @@ function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  if (uiState.scoreboardMode) {
+    return `
+      <section class="scoreboard-screen">
+        <div class="scoreboard-topline">
+          <span>${escapeHtml(match.homeTeam)}</span>
+          <span>Period ${local.currentPeriod} • ${stateLabel}</span>
+          <span>${escapeHtml(match.awayTeam)}</span>
+        </div>
+        <div class="scoreboard-main">
+          <div id="scoreHome" class="scoreboard-team-value">${local.homeScore}</div>
+          <div class="scoreboard-clock-wrap">
+            <div id="liveClock" class="scoreboard-clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
+          </div>
+          <div id="scoreAway" class="scoreboard-team-value">${local.awayScore}</div>
+        </div>
+      </section>
+    `;
+  }
   const fullscreenLabel = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
   const menu = uiState.matchMenuOpen
     ? `
@@ -1329,6 +1347,12 @@ function render(): void {
       ? renderCreateView()
       : renderListView();
 
+  if (uiState.view === "match" && selectedMatch && uiState.scoreboardMode) {
+    appRoot.innerHTML = body;
+    wireHandlers();
+    return;
+  }
+
   appRoot.innerHTML = `
     <div class="app-shell">
       <h1>Hockey Timer</h1>
@@ -1455,6 +1479,12 @@ function initKeyboardShortcuts(): void {
     if (uiState.view !== "match") return;
     if (isEditable(event.target)) return;
     if (event.key === "Escape") {
+      if (uiState.scoreboardMode) {
+        uiState.scoreboardMode = false;
+        uiState.matchMenuOpen = false;
+        render();
+        return;
+      }
       uiState.view = "list";
       render();
       return;
