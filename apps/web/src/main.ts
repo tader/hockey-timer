@@ -966,9 +966,27 @@ function replayKnownEvents(events: MatchEvent[], nowMs: number): LocalProjection
       currentPeriodPlayedSeconds = 0;
     }
 
+    if (event.eventType === "period.set") {
+      const requested = Number(payload.period ?? currentPeriod);
+      const bounded = Math.max(1, Math.min(format.periodCount, Number.isFinite(requested) ? requested : currentPeriod));
+      currentPeriod = bounded;
+      currentPeriodPlayedSeconds = 0;
+    }
+
     if (event.eventType === "period.ended") {
       currentPeriod = Math.min(format.periodCount, currentPeriod + 1);
       currentPeriodPlayedSeconds = 0;
+    }
+
+    if (event.eventType === "clock.reset") {
+      currentPeriodPlayedSeconds = 0;
+    }
+
+    if (event.eventType === "clock.adjusted") {
+      const deltaSeconds = Number(payload.deltaSeconds ?? 0);
+      if (Number.isFinite(deltaSeconds)) {
+        currentPeriodPlayedSeconds = Math.max(0, currentPeriodPlayedSeconds + deltaSeconds);
+      }
     }
 
     if (event.eventType === "match.ended") {
@@ -1193,6 +1211,12 @@ function renderMatchView(match: MatchMetadata): string {
         <button class="js-action" data-action="pause">Pause <kbd>Space</kbd></button>
         <button class="js-action" data-action="resume">Resume <kbd>Space</kbd></button>
         <button class="js-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+        <button class="js-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
+        <button class="js-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+        <button class="js-action" data-action="clockMinus60">-60s <kbd>-</kbd></button>
+        <button class="js-action" data-action="clockMinus10">-10s <kbd>,</kbd></button>
+        <button class="js-action" data-action="clockPlus10">+10s <kbd>.</kbd></button>
+        <button class="js-action" data-action="clockPlus60">+60s <kbd>=</kbd></button>
         <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
         <button class="js-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
         <button class="js-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
@@ -1269,11 +1293,34 @@ function syncLivePanel(): void {
 async function triggerAction(action: string): Promise<void> {
   const selectedMatch = getSelectedMatch();
   if (!selectedMatch) return;
+
+  const local = replayKnownEvents(uiState.events, Date.now());
+  if (action === "previousPeriod") {
+    if (local.currentPeriod <= 1) {
+      uiState.output = "Already at first period.";
+      syncLivePanel();
+      return;
+    }
+    try {
+      await pushEvent(selectedMatch.id, "period.set", { period: local.currentPeriod - 1 });
+      await refreshProjection();
+    } catch (error) {
+      uiState.output = (error as Error).message;
+      syncLivePanel();
+    }
+    return;
+  }
+
   const actionToEvent: Record<string, { eventType: string; payload: Record<string, string | number> | object }> = {
     start: { eventType: "match.started", payload: {} },
     pause: { eventType: "match.paused", payload: {} },
     resume: { eventType: "match.resumed", payload: {} },
     endPeriod: { eventType: "period.ended", payload: {} },
+    clockReset: { eventType: "clock.reset", payload: {} },
+    clockMinus60: { eventType: "clock.adjusted", payload: { deltaSeconds: -60 } },
+    clockMinus10: { eventType: "clock.adjusted", payload: { deltaSeconds: -10 } },
+    clockPlus10: { eventType: "clock.adjusted", payload: { deltaSeconds: 10 } },
+    clockPlus60: { eventType: "clock.adjusted", payload: { deltaSeconds: 60 } },
     endMatch: { eventType: "match.ended", payload: {} },
     homePlus: { eventType: "score.changed", payload: { team: "home", delta: 1, reason: "goal" } },
     awayPlus: { eventType: "score.changed", payload: { team: "away", delta: 1, reason: "goal" } },
@@ -1336,7 +1383,13 @@ function initKeyboardShortcuts(): void {
     }
     const key = event.key.toLowerCase();
     if (key === "e") void triggerAction("endPeriod");
+    if (key === "p") void triggerAction("previousPeriod");
     if (key === "m") void triggerAction("endMatch");
+    if (event.key === "0") void triggerAction("clockReset");
+    if (event.key === "-") void triggerAction("clockMinus60");
+    if (event.key === ",") void triggerAction("clockMinus10");
+    if (event.key === ".") void triggerAction("clockPlus10");
+    if (event.key === "=" || event.key === "+") void triggerAction("clockPlus60");
     if (key === "h") void triggerAction(event.shiftKey ? "homeMinus" : "homePlus");
     if (key === "a") void triggerAction(event.shiftKey ? "awayMinus" : "awayPlus");
   });
