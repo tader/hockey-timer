@@ -94,6 +94,7 @@ type UIState = {
   liveNowMs: number;
   listScores: Record<string, MatchScore>;
   listScoresRefreshing: boolean;
+  matchMetadataVisible: boolean;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -131,6 +132,7 @@ const uiState: UIState = {
   liveNowMs: Date.now(),
   listScores: {},
   listScoresRefreshing: false,
+  matchMetadataVisible: false,
 };
 
 if (uiState.matches.length === 0) {
@@ -1158,55 +1160,64 @@ function renderMatchView(match: MatchMetadata): string {
       <p class="muted">${escapeHtml(matchSubtitle(match) || "No metadata")}</p>
       <div class="scoreboard">
         <div class="team-score">
+          <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
           <div class="team-label">Home</div>
           <div id="scoreHome" class="score-number">${local.homeScore}</div>
+          <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
         </div>
         <div class="clock-panel">
           <div id="liveClock" class="clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
           <div id="liveState" class="state-pill">${stateLabel}</div>
           <div id="livePeriod" class="muted">Period ${local.currentPeriod}</div>
+          <div class="clock-controls">
+            <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
+            <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+            <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+            <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+            <button class="js-action neutral-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
+            <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+            <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
+            <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
+            <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
+            <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
+            <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
+            <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
+          </div>
         </div>
         <div class="team-score">
+          <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
           <div class="team-label">Away</div>
           <div id="scoreAway" class="score-number">${local.awayScore}</div>
+          <button class="js-action away-action score-action score-action-minus" data-action="awayMinus">-1 <kbd>Shift+A</kbd></button>
         </div>
-      </div>
-      <div class="control-grid">
-        <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
-        <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
-        <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
-        <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
-        <button class="js-action neutral-action" data-action="previousPeriod">Previous Period <kbd>P</kbd></button>
-        <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-        <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
-        <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
-        <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
-        <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
-        <button class="js-action home-action" data-action="homePlus">Home +1 <kbd>H</kbd></button>
-        <button class="js-action away-action" data-action="awayPlus">Away +1 <kbd>A</kbd></button>
-        <button class="js-action home-action" data-action="homeMinus">Home -1 <kbd>Shift+H</kbd></button>
-        <button class="js-action away-action" data-action="awayMinus">Away -1 <kbd>Shift+A</kbd></button>
-        <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-        <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
       </div>
       <section class="card">
         <div class="title-row">
           <h3>Match Metadata</h3>
-          <button id="assignFromKNHB" class="ghost">Import/Assign KNHB</button>
+          <div class="row">
+            <button id="toggleMetadataEditor" class="ghost">${uiState.matchMetadataVisible ? "Hide" : "Show"}</button>
+            <button id="assignFromKNHB" class="ghost" ${uiState.matchMetadataVisible ? "" : "disabled"}>Import/Assign KNHB</button>
+          </div>
         </div>
-        <div class="filters-grid">
-          <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
-          <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
-          <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
-          <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
-          <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
-        </div>
-        <div class="row">
-          <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
-          <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
-          <button id="saveMetadata">Save Metadata</button>
-          <button id="refreshKNHBMetadata" class="ghost" ${match.knhbMatchId && match.knhbSourceTeamId ? "" : "disabled"}>Refresh KNHB Data</button>
-        </div>
+        ${
+          uiState.matchMetadataVisible
+            ? `
+              <div class="filters-grid">
+                <input id="editHome" value="${escapeHtml(match.homeTeam)}" placeholder="Home team" />
+                <input id="editAway" value="${escapeHtml(match.awayTeam)}" placeholder="Away team" />
+                <input id="editLocationClub" value="${escapeHtml(match.locationClubName ?? "")}" placeholder="Location" />
+                <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
+                <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
+              </div>
+              <div class="row">
+                <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
+                <input id="editDateTime" type="datetime-local" value="${escapeHtml(formatForDateTimeLocal(match.matchDateTime))}" />
+                <button id="saveMetadata">Save Metadata</button>
+                <button id="refreshKNHBMetadata" class="ghost" ${match.knhbMatchId && match.knhbSourceTeamId ? "" : "disabled"}>Refresh KNHB Data</button>
+              </div>
+            `
+            : `<p class="muted">Metadata editor is hidden.</p>`
+        }
       </section>
       <h3>Events</h3>
       <div id="liveEvents" class="events-list">${renderEventsList()}</div>
@@ -1456,6 +1467,12 @@ function wireHandlers(): void {
   appRoot.querySelector<HTMLButtonElement>("#backFromCreate")?.addEventListener("click", () => {
     uiState.view = uiState.importTarget === "update" ? "match" : "list";
     render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#toggleMetadataEditor")?.addEventListener("click", () => {
+    uiState.matchMetadataVisible = !uiState.matchMetadataVisible;
+    render();
+    syncLivePanel();
   });
 
   appRoot.querySelector<HTMLButtonElement>("#modeKNHB")?.addEventListener("click", () => {

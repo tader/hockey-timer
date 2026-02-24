@@ -227,6 +227,24 @@ select:focus {
   padding: 1rem;
 }
 
+.team-score {
+  align-content: space-between;
+  gap: 0.55rem;
+}
+
+.score-action {
+  width: 100%;
+  max-width: 7rem;
+}
+
+.score-action-plus {
+  margin-bottom: 0.1rem;
+}
+
+.score-action-minus {
+  margin-top: 0.1rem;
+}
+
 .team-label {
   color: #456279;
   font-size: 0.86rem;
@@ -255,6 +273,14 @@ select:focus {
   padding: 0.22rem 0.74rem;
   font-weight: 800;
   letter-spacing: 0.03em;
+}
+
+.clock-controls {
+  margin-top: 0.7rem;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  gap: 0.4rem;
 }
 
 .control-grid {
