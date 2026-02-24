@@ -104,6 +104,13 @@ button.neutral-action:hover {
   border-color: #175f99;
 }
 
+button.period-advance-highlight,
+button.period-advance-highlight:hover {
+  background: #a8302a;
+  border-color: #a8302a;
+  color: #fff;
+}
+
 input,
 select {
   width: 100%;

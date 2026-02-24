@@ -693,8 +693,14 @@ function ordinal(value: number): string {
   return `${value}th`;
 }
 
+function periodUnit(periodCount: number): "Half" | "Quarter" | "Period" {
+  if (periodCount === 2) return "Half";
+  if (periodCount === 4) return "Quarter";
+  return "Period";
+}
+
 function periodLabel(period: number, periodCount: number): string {
-  const unit = periodCount === 2 ? "Half" : periodCount === 4 ? "Quarter" : "Period";
+  const unit = periodUnit(periodCount);
   return `${ordinal(period)} ${unit}`;
 }
 
@@ -1413,12 +1419,12 @@ function renderMatchView(match: MatchMetadata): string {
               </div>
               <div class="grid-cell center-bottom-controls">
                 <div class="time-controls-row three-cols">
-                  <button class="js-action clock-action" data-action="endPeriod">+ Period <kbd>E</kbd></button>
+                  <button id="advancePeriodAction" class="js-action clock-action ${timer.isOverrun ? "period-advance-highlight" : ""}" data-action="endPeriod">+ ${periodUnit(local.format.periodCount)} <kbd>E</kbd></button>
                   <button class="js-action clock-action" data-action="clockPlus60">+ 1:00 <kbd>.</kbd></button>
                   <button class="js-action clock-action" data-action="clockPlus10">+ 0:10 <kbd>&gt;</kbd></button>
                 </div>
                 <div class="time-controls-row three-cols">
-                  <button class="js-action clock-action" data-action="previousPeriod">- Period <kbd>P</kbd></button>
+                  <button id="previousPeriodAction" class="js-action clock-action" data-action="previousPeriod">- ${periodUnit(local.format.periodCount)} <kbd>P</kbd></button>
                   <button class="js-action clock-action" data-action="clockMinus60">- 1:00 <kbd>,</kbd></button>
                   <button class="js-action clock-action" data-action="clockMinus10">- 0:10 <kbd>&lt;</kbd></button>
                 </div>
@@ -1507,6 +1513,8 @@ function syncLivePanel(): void {
   const primaryClockAction = appRoot.querySelector<HTMLButtonElement>("#primaryClockAction");
   const endMatchAction = appRoot.querySelector<HTMLButtonElement>("#endMatchAction");
   const resetClockAction = appRoot.querySelector<HTMLButtonElement>("#resetClockAction");
+  const advancePeriodAction = appRoot.querySelector<HTMLButtonElement>("#advancePeriodAction");
+  const previousPeriodAction = appRoot.querySelector<HTMLButtonElement>("#previousPeriodAction");
 
   if (scoreHome) scoreHome.textContent = String(local.homeScore);
   if (scoreAway) scoreAway.textContent = String(local.awayScore);
@@ -1516,6 +1524,13 @@ function syncLivePanel(): void {
   if (clock) {
     clock.textContent = timer.label;
     clock.classList.toggle("overrun", timer.isOverrun);
+  }
+  if (advancePeriodAction) {
+    advancePeriodAction.classList.toggle("period-advance-highlight", timer.isOverrun);
+    advancePeriodAction.innerHTML = `+ ${periodUnit(local.format.periodCount)} <kbd>E</kbd>`;
+  }
+  if (previousPeriodAction) {
+    previousPeriodAction.innerHTML = `- ${periodUnit(local.format.periodCount)} <kbd>P</kbd>`;
   }
   if (primaryClockAction) {
     primaryClockAction.classList.toggle("danger", control.cssClass === "danger");

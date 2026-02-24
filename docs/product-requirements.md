@@ -46,6 +46,11 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - timer/status block
   - row 3: `+ Period`, `+ 1:00`, `+ 0:10`
   - row 4: `- Period`, `- 1:00`, `- 0:10`
+- When current period playing time is up (clock in overrun), highlight the `+ Half` / `+ Quarter` / `+ Period` button to prompt period advancement.
+- In period-advance controls, use wording based on configured period count:
+  - 2 periods: `Half`
+  - 4 periods: `Quarter`
+  - any other count: `Period`
 - In web match view, `Refresh` should be available from the kebab menu.
 - Period label wording in match view should adapt to format:
   - 2 periods: `Half` (for example `1st Half`)
