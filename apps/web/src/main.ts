@@ -1400,6 +1400,7 @@ function renderMatchView(match: MatchMetadata): string {
         <div class="grid-cell team-score">
           <div class="team-label">Home</div>
           <div id="scoreHome" class="score-number">${local.homeScore}</div>
+          ${match.homeTeam.trim() && match.homeTeam.trim().toLowerCase() !== "home" ? `<div class="team-name">${escapeHtml(match.homeTeam)}</div>` : ""}
         </div>
         <div class="grid-cell clock-panel">
           <div id="liveClock" class="clock ${timer.isOverrun ? "overrun" : ""}">${escapeHtml(timer.label)}</div>
@@ -1409,6 +1410,7 @@ function renderMatchView(match: MatchMetadata): string {
         <div class="grid-cell team-score">
           <div class="team-label">Away</div>
           <div id="scoreAway" class="score-number">${local.awayScore}</div>
+          ${match.awayTeam.trim() && match.awayTeam.trim().toLowerCase() !== "away" ? `<div class="team-name">${escapeHtml(match.awayTeam)}</div>` : ""}
         </div>
         ${
           uiState.scoreboardMode

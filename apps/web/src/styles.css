@@ -278,6 +278,12 @@ select:focus {
   letter-spacing: 0.05em;
 }
 
+.team-name {
+  color: #2d4f6b;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
 .score-number {
   font-size: clamp(2.8rem, 8vw, 5.9rem);
   line-height: 1;

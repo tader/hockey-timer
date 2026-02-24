@@ -99,6 +99,7 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - In web custom create and edit metadata flows, users can set match format:
   - period count
   - duration per period (minutes; applied uniformly across all periods)
+- In web match view, show home/away team names below their scores when concrete team names are known (not placeholder labels).
 - Match list should show match date (local, Europe/Amsterdam).
 - Match list should sort newest-first (based on match date/time, fallback to creation time).
 - Match list should support filtering by:
