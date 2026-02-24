@@ -237,6 +237,16 @@ select:focus {
   padding: 0.8rem;
 }
 
+.score-control-top,
+.score-control-bottom,
+.center-top-controls,
+.center-bottom-controls {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
 .team-score {
   gap: 0.5rem;
 }
@@ -290,6 +300,23 @@ select:focus {
 
 .center-bottom-controls {
   align-self: start;
+}
+
+.score-layout.scoreboard-mode {
+  grid-template-rows: minmax(13rem, auto);
+}
+
+.score-layout.scoreboard-mode .team-score,
+.score-layout.scoreboard-mode .clock-panel {
+  padding: 1.2rem;
+}
+
+.score-layout.scoreboard-mode .score-number {
+  font-size: clamp(4rem, 11vw, 8rem);
+}
+
+.score-layout.scoreboard-mode .clock {
+  font-size: clamp(3rem, 9vw, 6.4rem);
 }
 
 .match-menu-anchor {

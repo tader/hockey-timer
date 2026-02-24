@@ -97,6 +97,7 @@ type UIState = {
   matchMenuOpen: boolean;
   metadataModalOpen: boolean;
   showEventStream: boolean;
+  scoreboardMode: boolean;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -137,6 +138,7 @@ const uiState: UIState = {
   matchMenuOpen: false,
   metadataModalOpen: false,
   showEventStream: true,
+  scoreboardMode: false,
 };
 
 if (uiState.matches.length === 0) {
@@ -1196,11 +1198,17 @@ function renderMatchView(match: MatchMetadata): string {
   const local = replayKnownEvents(uiState.events, uiState.liveNowMs);
   const timer = timerFromLocalProjection(local);
   const stateLabel = local.isEnded ? "ENDED" : local.isRunning ? "RUNNING" : "PAUSED";
+  const fullscreenLabel = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
   const menu = uiState.matchMenuOpen
     ? `
       <div class="match-menu" role="menu">
         <button id="openMetadataModal" class="ghost menu-item" role="menuitem">Edit Metadata</button>
         <button id="assignFromKNHB" class="ghost menu-item" role="menuitem">Import/Assign KNHB</button>
+        <button id="toggleFullscreen" class="ghost menu-item" role="menuitem">${fullscreenLabel}</button>
+        <label class="menu-check">
+          <input id="toggleScoreboardMode" type="checkbox" ${uiState.scoreboardMode ? "checked" : ""} />
+          <span>Scoreboard Mode</span>
+        </label>
         <label class="menu-check">
           <input id="toggleEventStream" type="checkbox" ${uiState.showEventStream ? "checked" : ""} />
           <span>Show Event Stream</span>
@@ -1222,20 +1230,26 @@ function renderMatchView(match: MatchMetadata): string {
       </div>
       <h2>${escapeHtml(matchTitle(match))}</h2>
       <p class="muted">${escapeHtml(matchSubtitle(match) || "No metadata")}</p>
-      <div class="score-layout">
-        <div class="grid-cell score-control-top">
-          <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
-        </div>
-        <div class="grid-cell center-top-controls">
-          <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
-          <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
-          <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
-          <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
-          <button class="js-action neutral-action" data-action="previousPeriod">Prev Period <kbd>P</kbd></button>
-        </div>
-        <div class="grid-cell score-control-top">
-          <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
-        </div>
+      <div class="score-layout ${uiState.scoreboardMode ? "scoreboard-mode" : ""}">
+        ${
+          uiState.scoreboardMode
+            ? ""
+            : `
+              <div class="grid-cell score-control-top">
+                <button class="js-action home-action score-action score-action-plus" data-action="homePlus">+1 <kbd>H</kbd></button>
+              </div>
+              <div class="grid-cell center-top-controls">
+                <button class="js-action neutral-action" data-action="start">Start <kbd>S</kbd></button>
+                <button class="js-action neutral-action" data-action="pause">Pause <kbd>Space</kbd></button>
+                <button class="js-action neutral-action" data-action="resume">Resume <kbd>Space</kbd></button>
+                <button class="js-action neutral-action" data-action="endPeriod">End Period <kbd>E</kbd></button>
+                <button class="js-action neutral-action" data-action="previousPeriod">Prev Period <kbd>P</kbd></button>
+              </div>
+              <div class="grid-cell score-control-top">
+                <button class="js-action away-action score-action score-action-plus" data-action="awayPlus">+1 <kbd>A</kbd></button>
+              </div>
+            `
+        }
 
         <div class="grid-cell team-score">
           <div class="team-label">Home</div>
@@ -1250,22 +1264,27 @@ function renderMatchView(match: MatchMetadata): string {
           <div class="team-label">Away</div>
           <div id="scoreAway" class="score-number">${local.awayScore}</div>
         </div>
-
-        <div class="grid-cell score-control-bottom">
-          <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
-        </div>
-        <div class="grid-cell center-bottom-controls">
-          <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
-          <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
-          <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
-          <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
-          <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
-          <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
-          <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
-        </div>
-        <div class="grid-cell score-control-bottom">
-          <button class="js-action away-action score-action score-action-minus" data-action="awayMinus">-1 <kbd>Shift+A</kbd></button>
-        </div>
+        ${
+          uiState.scoreboardMode
+            ? ""
+            : `
+              <div class="grid-cell score-control-bottom">
+                <button class="js-action home-action score-action score-action-minus" data-action="homeMinus">-1 <kbd>Shift+H</kbd></button>
+              </div>
+              <div class="grid-cell center-bottom-controls">
+                <button class="js-action clock-action" data-action="clockReset">Reset Clock <kbd>0</kbd></button>
+                <button class="js-action clock-action" data-action="clockMinus60">-60s <kbd>,</kbd></button>
+                <button class="js-action clock-action" data-action="clockPlus60">+60s <kbd>.</kbd></button>
+                <button class="js-action clock-action" data-action="clockMinus10">-10s <kbd>&lt;</kbd></button>
+                <button class="js-action clock-action" data-action="clockPlus10">+10s <kbd>&gt;</kbd></button>
+                <button class="js-action danger" data-action="endMatch">End Match <kbd>M</kbd></button>
+                <button id="poll" class="ghost">Refresh <kbd>R</kbd></button>
+              </div>
+              <div class="grid-cell score-control-bottom">
+                <button class="js-action away-action score-action score-action-minus" data-action="awayMinus">-1 <kbd>Shift+A</kbd></button>
+              </div>
+            `
+        }
       </div>
       ${uiState.showEventStream ? `
       <h3>Events</h3>
@@ -1398,6 +1417,19 @@ function applySort(field: UIState["sortField"]): void {
   } else {
     uiState.sortField = field;
     uiState.sortDirection = field === "matchDateTime" || field === "createdAt" ? "desc" : "asc";
+  }
+}
+
+async function toggleFullscreen(): Promise<void> {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch (error) {
+    uiState.output = `Fullscreen toggle failed: ${(error as Error).message}`;
+    syncLivePanel();
   }
 }
 
@@ -1566,6 +1598,19 @@ function wireHandlers(): void {
     uiState.showEventStream = target.checked;
     uiState.matchMenuOpen = false;
     render();
+  });
+
+  appRoot.querySelector<HTMLInputElement>("#toggleScoreboardMode")?.addEventListener("change", (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    uiState.scoreboardMode = target.checked;
+    uiState.matchMenuOpen = false;
+    render();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#toggleFullscreen")?.addEventListener("click", () => {
+    uiState.matchMenuOpen = false;
+    render();
+    void toggleFullscreen();
   });
 
   appRoot.querySelector<HTMLButtonElement>("#closeMetadataModal")?.addEventListener("click", () => {
