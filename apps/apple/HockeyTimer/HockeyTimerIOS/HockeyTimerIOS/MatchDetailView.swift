@@ -59,6 +59,9 @@ struct MatchDetailView: View {
             }
             Text("API Base")
                 .font(.headline)
+            Text("Configure API connection here; watch uses phone-managed settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             TextField("http://192.168.1.153:8787", text: $apiBaseDraft)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()

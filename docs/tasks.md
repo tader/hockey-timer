@@ -18,6 +18,8 @@
     choices.
 12. Watch offline operation requirement tightened: live watch timing and score
     must use local projection first, with sync as background convergence only.
+13. Apple API configuration ownership clarified: iPhone is primary; watch manual
+    API editing is removed from watch UI.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

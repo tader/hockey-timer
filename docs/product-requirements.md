@@ -44,6 +44,9 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - User must be able to end the match explicitly from match controls.
 - Watch timer and score display must update from local events immediately. Sync
   failures must queue events and never block live match operation.
+- iPhone is the primary API configuration surface for Apple apps. The watch app
+  must not expose manual API editing; watch operation remains offline-first and
+  uses previously synced/local API configuration only for background sync.
 - Web match-view time controls should be ordered for operational flow:
   - row 1: one primary control that changes by state (`Start`/`Pause`/`Resume`)
   - this primary control reads `Start` before first clock start, and appears red while clock is running (pause action)

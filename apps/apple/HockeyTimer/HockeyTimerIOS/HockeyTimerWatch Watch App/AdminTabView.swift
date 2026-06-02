@@ -2,7 +2,6 @@ import SwiftUI
 
 struct AdminTabView: View {
     @EnvironmentObject private var model: WatchMatchViewModel
-    @State private var showApiSettings = false
 
     var body: some View {
         ScrollView {
@@ -50,8 +49,6 @@ struct AdminTabView: View {
                         .disabled(true)
                 }
 
-                Button("API Settings") { showApiSettings = true }
-
                 Text("\(model.periodProgressLabel) \(model.stateLabel)")
                     .font(.caption2)
                     .foregroundColor(.gray)
@@ -59,10 +56,6 @@ struct AdminTabView: View {
         }
         .buttonStyle(.bordered)
         .padding(8)
-        .sheet(isPresented: $showApiSettings) {
-            WatchApiSettingsView()
-                .environmentObject(model)
-        }
     }
 
     private func labeledIconButton(
