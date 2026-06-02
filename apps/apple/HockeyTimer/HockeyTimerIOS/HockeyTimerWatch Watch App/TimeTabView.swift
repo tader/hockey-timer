@@ -36,12 +36,14 @@ struct TimeTabView: View {
             Spacer(minLength: 4)
 
             if model.isRunning {
-                Text(model.watchTimeText)
-                    .font(.system(size: 64, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.45)
-                    .lineLimit(1)
-                    .foregroundColor(model.watchTimeIsOvertime ? .red : .yellow)
+                TimelineView(.periodic(from: .now, by: 0.25)) { timeline in
+                    Text(model.watchTimeText(on: timeline.date))
+                        .font(.system(size: 64, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.45)
+                        .lineLimit(1)
+                        .foregroundColor(model.watchTimeIsOvertime(on: timeline.date) ? .red : .yellow)
+                }
 
                 Text(model.periodProgressLabel)
                     .font(.footnote)

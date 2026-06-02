@@ -17,6 +17,9 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - Strong offline behavior, especially on watches.
 - Best-effort near-real-time sync with eventual consistency.
 - App must be usable without mandatory sign-in.
+- Apple Watch core match operation must fully function with no phone or internet
+  connectivity: create a new match, select format, start/pause/resume/end
+  periods, keep running time, adjust score, and end the match.
 
 ## Match & Timer Requirements
 - Record events such as:
@@ -39,6 +42,8 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - When period duration is exceeded, timer should show overtime as elapsed overrun.
 - User must be able to end a period even if timer was never started.
 - User must be able to end the match explicitly from match controls.
+- Watch timer and score display must update from local events immediately. Sync
+  failures must queue events and never block live match operation.
 - Web match-view time controls should be ordered for operational flow:
   - row 1: one primary control that changes by state (`Start`/`Pause`/`Resume`)
   - this primary control reads `Start` before first clock start, and appears red while clock is running (pause action)

@@ -10,8 +10,10 @@ class MatchSyncViewModel: ObservableObject {
     @Published var currentPeriodPlayedSeconds: Int = 0
     @Published var periodCount: Int = 4
     @Published var periodDurationSeconds: Int = 17 * 60 + 30
+    @Published var periodDurationSecondsByPeriod: [Int] = Array(repeating: 17 * 60 + 30, count: 4)
     @Published var pendingEventCount: Int = 0
     @Published var lastError: String?
+    @Published var runningStartedAt: Date?
 
     private var matchId: String
     private let originPlatform: String
@@ -21,6 +23,7 @@ class MatchSyncViewModel: ObservableObject {
     private let defaultApiBase: String
     private let activeMatchIdKey: String?
     private var queueStore: PendingEventStore
+    private var localProjectionStore: LocalMatchProjectionStore?
 
     init(
         matchId: String,
@@ -42,6 +45,13 @@ class MatchSyncViewModel: ObservableObject {
         self.queueStore = PendingEventStore(
             key: "hockeytimer.pending-events.\(originPlatform).\(activeMatchId)"
         )
+        self.localProjectionStore = activeMatchIdKey.map { _ in
+            LocalMatchProjectionStore(
+                key: "hockeytimer.local-projection.\(originPlatform).\(activeMatchId)"
+            )
+        }
+
+        loadLocalProjection()
 
         Task {
             await updatePendingEventCount()
@@ -68,14 +78,14 @@ class MatchSyncViewModel: ObservableObject {
     var watchTimeText: String {
         WatchPresentation.timeText(
             periodDurationSeconds: periodDurationSeconds,
-            playedSeconds: currentPeriodPlayedSeconds
+            playedSeconds: localCurrentPeriodPlayedSeconds()
         )
     }
 
     var watchTimeIsOvertime: Bool {
         WatchPresentation.isOvertime(
             periodDurationSeconds: periodDurationSeconds,
-            playedSeconds: currentPeriodPlayedSeconds
+            playedSeconds: localCurrentPeriodPlayedSeconds()
         )
     }
 
@@ -123,16 +133,23 @@ class MatchSyncViewModel: ObservableObject {
                 await MainActor.run {
                     homeScore = projection.homeScore
                     awayScore = projection.awayScore
+                    if pendingEventCount > 0 {
+                        lastError = nil
+                        return
+                    }
                     isRunning = projection.isRunning
                     isEnded = projection.isEnded
                     currentPeriod = projection.currentPeriod
                     currentPeriodPlayedSeconds = projection.currentPeriodPlayedSeconds
+                    runningStartedAt = projection.isRunning ? Date() : nil
                     periodCount = projection.format.periodCount
+                    periodDurationSecondsByPeriod = projection.format.periodDurationSeconds
                     let periodIndex = max(0, projection.currentPeriod - 1)
                     periodDurationSeconds = projection.format.periodDurationSeconds.indices.contains(periodIndex)
                         ? projection.format.periodDurationSeconds[periodIndex]
                         : 0
                     lastError = nil
+                    saveLocalProjection()
                 }
             } catch {
                 await MainActor.run {
@@ -179,11 +196,15 @@ class MatchSyncViewModel: ObservableObject {
         let newQueueStore = PendingEventStore(
             key: "hockeytimer.pending-events.\(originPlatform).\(newMatchId)"
         )
+        let newLocalProjectionStore = LocalMatchProjectionStore(
+            key: "hockeytimer.local-projection.\(originPlatform).\(newMatchId)"
+        )
         matchId = newMatchId
         if let activeMatchIdKey {
             UserDefaults.standard.set(newMatchId, forKey: activeMatchIdKey)
         }
         queueStore = newQueueStore
+        localProjectionStore = newLocalProjectionStore
 
         homeScore = 0
         awayScore = 0
@@ -191,9 +212,12 @@ class MatchSyncViewModel: ObservableObject {
         isEnded = false
         currentPeriod = 1
         currentPeriodPlayedSeconds = 0
+        runningStartedAt = nil
         periodCount = format.periodCount
+        periodDurationSecondsByPeriod = format.periodDurationSeconds
         periodDurationSeconds = format.periodDurationSeconds.first ?? 0
         lastError = nil
+        saveLocalProjection()
 
         let now = ISO8601DateFormatter().string(from: Date())
         let events = [
@@ -235,6 +259,8 @@ class MatchSyncViewModel: ObservableObject {
             matchId: eventMatchId,
             occurredAt: ISO8601DateFormatter().string(from: Date())
         )
+        applyLocal(event: event)
+        saveLocalProjection()
 
         Task {
             await eventQueueStore.append(event)
@@ -274,6 +300,126 @@ class MatchSyncViewModel: ObservableObject {
             payload: payload,
             version: 1
         )
+    }
+
+    private func applyLocal(event: MatchEventDTO) {
+        let occurredAt = parseDate(event.occurredAt) ?? Date()
+
+        if event.eventType == "score.changed" {
+            let delta = event.payload.delta ?? 0
+            if event.payload.team == "home" {
+                homeScore = max(0, homeScore + delta)
+            } else if event.payload.team == "away" {
+                awayScore = max(0, awayScore + delta)
+            }
+        }
+
+        if event.eventType == "match.format.updated" {
+            if let payloadPeriodCount = event.payload.periodCount,
+               let payloadDurations = event.payload.periodDurationSeconds,
+               !payloadDurations.isEmpty {
+                periodCount = payloadPeriodCount
+                periodDurationSecondsByPeriod = payloadDurations
+                let periodIndex = max(0, currentPeriod - 1)
+                periodDurationSeconds = payloadDurations.indices.contains(periodIndex)
+                    ? payloadDurations[periodIndex]
+                    : payloadDurations[0]
+            }
+        }
+
+        if event.eventType == "match.started" || event.eventType == "match.resumed" {
+            guard !isEnded else { return }
+            isRunning = true
+            runningStartedAt = occurredAt
+        }
+
+        if event.eventType == "match.paused" || event.eventType == "match.ended" || event.eventType == "period.ended" {
+            updateCurrentPeriodPlayedSeconds(asOf: occurredAt)
+            isRunning = false
+            runningStartedAt = nil
+        }
+
+        if event.eventType == "period.ended" {
+            currentPeriod = min(periodCount, currentPeriod + 1)
+            currentPeriodPlayedSeconds = 0
+            let periodIndex = max(0, currentPeriod - 1)
+            periodDurationSeconds = periodDurationSecondsByPeriod.indices.contains(periodIndex)
+                ? periodDurationSecondsByPeriod[periodIndex]
+                : periodDurationSeconds
+        }
+
+        if event.eventType == "match.ended" {
+            isEnded = true
+        }
+    }
+
+    func localCurrentPeriodPlayedSeconds(on date: Date = Date()) -> Int {
+        guard isRunning, let runningStartedAt else {
+            return currentPeriodPlayedSeconds
+        }
+
+        let liveDelta = max(0, Int(date.timeIntervalSince(runningStartedAt)))
+        return currentPeriodPlayedSeconds + liveDelta
+    }
+
+    func watchTimeText(on date: Date) -> String {
+        WatchPresentation.timeText(
+            periodDurationSeconds: periodDurationSeconds,
+            playedSeconds: localCurrentPeriodPlayedSeconds(on: date)
+        )
+    }
+
+    func watchTimeIsOvertime(on date: Date) -> Bool {
+        WatchPresentation.isOvertime(
+            periodDurationSeconds: periodDurationSeconds,
+            playedSeconds: localCurrentPeriodPlayedSeconds(on: date)
+        )
+    }
+
+    private func updateCurrentPeriodPlayedSeconds(asOf date: Date) {
+        guard let runningStartedAt else { return }
+        let liveDelta = max(0, Int(date.timeIntervalSince(runningStartedAt)))
+        currentPeriodPlayedSeconds += liveDelta
+    }
+
+    private func parseDate(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        return formatter.date(from: value)
+    }
+
+    private func saveLocalProjection() {
+        let projection = LocalMatchProjection(
+            homeScore: homeScore,
+            awayScore: awayScore,
+            isRunning: isRunning,
+            isEnded: isEnded,
+            currentPeriod: currentPeriod,
+            currentPeriodPlayedSeconds: currentPeriodPlayedSeconds,
+            periodCount: periodCount,
+            periodDurationSeconds: periodDurationSeconds,
+            periodDurationSecondsByPeriod: periodDurationSecondsByPeriod,
+            runningStartedAt: runningStartedAt?.timeIntervalSince1970
+        )
+        localProjectionStore?.save(projection)
+    }
+
+    private func loadLocalProjection() {
+        guard let projection = localProjectionStore?.load() else {
+            return
+        }
+
+        homeScore = projection.homeScore
+        awayScore = projection.awayScore
+        isRunning = projection.isRunning
+        isEnded = projection.isEnded
+        currentPeriod = projection.currentPeriod
+        currentPeriodPlayedSeconds = projection.currentPeriodPlayedSeconds
+        periodCount = projection.periodCount
+        periodDurationSeconds = projection.periodDurationSeconds
+        periodDurationSecondsByPeriod = projection.periodDurationSecondsByPeriod
+        runningStartedAt = projection.runningStartedAt.map {
+            Date(timeIntervalSince1970: $0)
+        }
     }
 
     private func flushQueuedEvents() async throws {
@@ -386,6 +532,46 @@ actor PendingEventStore {
         guard let data = try? encoder.encode(events) else {
             return
         }
+        defaults.set(data, forKey: key)
+    }
+}
+
+private struct LocalMatchProjection: Codable {
+    let homeScore: Int
+    let awayScore: Int
+    let isRunning: Bool
+    let isEnded: Bool
+    let currentPeriod: Int
+    let currentPeriodPlayedSeconds: Int
+    let periodCount: Int
+    let periodDurationSeconds: Int
+    let periodDurationSecondsByPeriod: [Int]
+    let runningStartedAt: TimeInterval?
+}
+
+private struct LocalMatchProjectionStore {
+    private let key: String
+    private let defaults = UserDefaults.standard
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(key: String) {
+        self.key = key
+    }
+
+    func load() -> LocalMatchProjection? {
+        guard let data = defaults.data(forKey: key) else {
+            return nil
+        }
+
+        return try? decoder.decode(LocalMatchProjection.self, from: data)
+    }
+
+    func save(_ projection: LocalMatchProjection) {
+        guard let data = try? encoder.encode(projection) else {
+            return
+        }
+
         defaults.set(data, forKey: key)
     }
 }

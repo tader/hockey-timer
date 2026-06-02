@@ -19,6 +19,10 @@
 - Maintain local append-only event log per match.
 - Every new event gets `(eventId UUID, originDeviceId, sequence)`.
 - Apply locally immediately (optimistic local truth).
+- On Apple Watch, local projection is authoritative for live operation. Starting
+  a new match, score updates, and clock state must work even with no phone or
+  internet path. Network fetches may repair or converge later, but must not
+  block the watch UI.
 - Sync worker retries with exponential backoff and jitter.
 - Persist outbound queue durably.
 - Use gossip-style peer exchange: replicas share known/missing events and converge.

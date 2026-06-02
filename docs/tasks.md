@@ -16,6 +16,8 @@
 11. Watch ended-match restart added: ended matches now offer quick creation of a
     fresh watch match with prominent `4 x 17½` format and alternate format
     choices.
+12. Watch offline operation requirement tightened: live watch timing and score
+    must use local projection first, with sync as background convergence only.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
