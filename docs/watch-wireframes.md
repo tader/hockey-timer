@@ -175,6 +175,103 @@ Use Design B as baseline, with selective additions:
 - Keep advanced score control in `B2`.
 - Add Design D join flow for collaboration.
 
+## Manual Watch App Reference Design
+
+Use the manually created watch app at
+`/Users/thomas/Documents/XCode Projects/Hockey` as visual reference only.
+Do not edit that project. Port layout and interaction ideas into this repo on
+top of the event-sourced match model.
+
+### Reference Tab Flow
+
+```text
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ Game Type   │  │ Game        │  │ Timer       │  │ Edit Score  │
+│             │  │             │  │             │  │             │
+│ format grid │  │ match ctrl  │  │ live face   │  │ corrections │
+└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+```
+
+For current implementation, defer `Game Type` until format-change events and
+parity flows exist. Keep its look documented as future reference:
+
+```text
+┌──────────────────────────┐
+│ [ 2 x 20 ] [ 2 x 25 ]    │
+│ [ 2 x 30 ] [ 2 x 35 ]    │
+│ [ 4 x 17.5 ]             │
+└──────────────────────────┘
+```
+
+### Reference Game Control Screen
+
+```text
+┌──────────────────────────┐
+│ [ + ] Match   [ x ] Qtr  │
+│                          │
+│        [ ▶ ] Start       │
+│                          │
+│ or while running:        │
+│        [ ❚❚ ] Pause      │
+└──────────────────────────┘
+```
+
+Behavior to carry forward:
+- Use compact icon buttons for match reset/new match, period end, start, and
+  pause.
+- Disable actions that do not apply to current match state.
+- Starting a period can move the user directly to the live timer face.
+
+### Reference Timer Screen
+
+```text
+┌──────────────────────────┐
+│    [ home score ] - [ away score ] │
+│                          │
+│          08:14           │
+│             2/4          │
+│                          │
+│      [ Start 3rd Period ]│
+└──────────────────────────┘
+```
+
+Behavior to carry forward:
+- Home and away scores are large tap targets at the top.
+- Timer is the primary element, very large, rounded, monospaced digits.
+- Remaining time uses yellow while positive and red once overtime starts.
+- Period indicator uses current period and total period count.
+- Between periods, replace the live timer with a start-next-period action.
+- After final period, offer new match/reset flow.
+
+### Reference Score Edit Screen
+
+```text
+┌──────────────────────────┐
+│      [ ▲ ]       [ ▲ ]   │
+│        2    -     1      │
+│      [ ▼ ]       [ ▼ ]   │
+│                          │
+│        Reset Score       │
+└──────────────────────────┘
+```
+
+Behavior to carry forward:
+- Use vertical increment/decrement controls per team.
+- Disable decrement at zero.
+- Disable reset score at `0-0`.
+
+### Current Porting Boundary
+
+Port now:
+- `Timer` visual structure into `TimeTabView`.
+- `Edit Score` visual structure into `ScoreTabView`.
+- `Game` control ideas into `AdminTabView`, keeping API settings.
+
+Defer:
+- `Game Type` implementation.
+- Snapshot state sharing from the manual app.
+- Widget-specific behavior.
+
 ## High-Priority Interaction Rules
 
 1. One-tap score increment from live screen.
