@@ -1,17 +1,38 @@
 import SwiftUI
 import Combine
 
+enum WatchTab {
+    case timer
+    case score
+    case admin
+
+    var title: String {
+        switch self {
+        case .timer: return "Timer"
+        case .score: return "Edit Score"
+        case .admin: return "Game"
+        }
+    }
+}
+
 struct WatchRootTabView: View {
     @StateObject private var model = WatchMatchViewModel()
+    @State private var selectedTab = WatchTab.timer
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        TabView {
-            TimeTabView()
-            ScoreTabView()
-            AdminTabView()
+        NavigationStack {
+            TabView(selection: $selectedTab) {
+                TimeTabView()
+                    .tag(WatchTab.timer)
+                ScoreTabView()
+                    .tag(WatchTab.score)
+                AdminTabView()
+                    .tag(WatchTab.admin)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .automatic))
+            .navigationTitle(selectedTab.title)
         }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
         .environmentObject(model)
         .onAppear {
             model.refreshProjection()

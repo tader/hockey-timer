@@ -61,6 +61,46 @@ class MatchSyncViewModel: ObservableObject {
         return "+\(format(seconds: abs(remaining))) over"
     }
 
+    var watchTimeText: String {
+        WatchPresentation.timeText(
+            periodDurationSeconds: periodDurationSeconds,
+            playedSeconds: currentPeriodPlayedSeconds
+        )
+    }
+
+    var watchTimeIsOvertime: Bool {
+        WatchPresentation.isOvertime(
+            periodDurationSeconds: periodDurationSeconds,
+            playedSeconds: currentPeriodPlayedSeconds
+        )
+    }
+
+    var periodProgressLabel: String {
+        WatchPresentation.periodProgressLabel(
+            currentPeriod: currentPeriod,
+            periodCount: periodCount
+        )
+    }
+
+    var nextPeriodTitle: String {
+        WatchPresentation.nextPeriodTitle(
+            currentPeriod: currentPeriod,
+            periodCount: periodCount
+        )
+    }
+
+    var canDecrementHome: Bool {
+        homeScore > 0
+    }
+
+    var canDecrementAway: Bool {
+        awayScore > 0
+    }
+
+    var canResetScore: Bool {
+        homeScore != 0 || awayScore != 0
+    }
+
     var currentApiBase: String {
         UserDefaults.standard.string(forKey: apiBaseKey) ?? defaultApiBase
     }
@@ -118,6 +158,16 @@ class MatchSyncViewModel: ObservableObject {
 
     func decrementAway() {
         push(eventType: "score.changed", payload: MatchEventPayload(team: "away", delta: -1, reason: "correction"))
+    }
+
+    func resetScore() {
+        if homeScore != 0 {
+            push(eventType: "score.changed", payload: MatchEventPayload(team: "home", delta: -homeScore, reason: "correction"))
+        }
+
+        if awayScore != 0 {
+            push(eventType: "score.changed", payload: MatchEventPayload(team: "away", delta: -awayScore, reason: "correction"))
+        }
     }
 
     private func push(eventType: String, payload: MatchEventPayload) {
