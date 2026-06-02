@@ -10,6 +10,9 @@
 7. Apple API base URL made runtime-configurable (iOS + watch).
 8. Durable Apple offline event queue implemented.
 9. iOS KNHB browse/import flow added for match prefill.
+10. Watch admin tab overflow fixed: manual-app-inspired controls exceeded small
+    watch heights because the tab used a fixed vertical stack. Admin controls now
+    live inside a scroll container so API settings remains reachable.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

@@ -221,6 +221,8 @@ Behavior to carry forward:
   pause.
 - Disable actions that do not apply to current match state.
 - Starting a period can move the user directly to the live timer face.
+- Admin/game controls must sit in a vertical scroll container. Smaller watch
+  sizes can clip the API/settings controls if this screen uses a fixed stack.
 
 ### Reference Timer Screen
 
