@@ -13,6 +13,9 @@
 10. Watch admin tab overflow fixed: manual-app-inspired controls exceeded small
     watch heights because the tab used a fixed vertical stack. Admin controls now
     live inside a scroll container so API settings remains reachable.
+11. Watch ended-match restart added: ended matches now offer quick creation of a
+    fresh watch match with prominent `4 x 17½` format and alternate format
+    choices.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

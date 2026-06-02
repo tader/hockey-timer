@@ -245,6 +245,33 @@ Behavior to carry forward:
 - Between periods, replace the live timer with a start-next-period action.
 - After final period, offer new match/reset flow.
 
+### Ended Match Quick Restart
+
+When a watch match is ended, the next action should be starting a fresh match,
+not digging through settings. The ended timer screen should show:
+
+```text
+┌──────────────────────────┐
+│          ENDED           │
+│                          │
+│      [ 4 x 17½ ]         │
+│        New Match         │
+│                          │
+│      [ Other Format ]    │
+└──────────────────────────┘
+```
+
+Behavior:
+- `4 x 17½` is the prominent one-tap target.
+- Tapping it creates a new quick watch match, applies format `4 x 17.5`, and
+  leaves the clock paused at `1/4` ready for `Start`.
+- `Other Format` opens compact choices: `2 x 20`, `2 x 25`, `2 x 30`,
+  `2 x 35`, and `4 x 17½`.
+- New match creation must use a new `matchId`. Reusing an ended match id is
+  invalid because replay keeps ended matches ended.
+- The watch persists the selected quick match id locally so polling and queued
+  events continue against the active match.
+
 ### Reference Score Edit Screen
 
 ```text

@@ -1,6 +1,50 @@
 import Foundation
 
+struct WatchMatchFormat: Equatable, Identifiable {
+    let id: String
+    let label: String
+    let periodCount: Int
+    let periodDurationSeconds: [Int]
+}
+
 struct WatchPresentation {
+    static let primaryNewMatchFormatLabel = "4 x 17½"
+
+    static let defaultNewMatchFormat = WatchMatchFormat(
+        id: "4x17_5",
+        label: primaryNewMatchFormatLabel,
+        periodCount: 4,
+        periodDurationSeconds: Array(repeating: 17 * 60 + 30, count: 4)
+    )
+
+    static let newMatchFormats = [
+        defaultNewMatchFormat,
+        WatchMatchFormat(
+            id: "2x20",
+            label: "2 x 20",
+            periodCount: 2,
+            periodDurationSeconds: Array(repeating: 20 * 60, count: 2)
+        ),
+        WatchMatchFormat(
+            id: "2x25",
+            label: "2 x 25",
+            periodCount: 2,
+            periodDurationSeconds: Array(repeating: 25 * 60, count: 2)
+        ),
+        WatchMatchFormat(
+            id: "2x30",
+            label: "2 x 30",
+            periodCount: 2,
+            periodDurationSeconds: Array(repeating: 30 * 60, count: 2)
+        ),
+        WatchMatchFormat(
+            id: "2x35",
+            label: "2 x 35",
+            periodCount: 2,
+            periodDurationSeconds: Array(repeating: 35 * 60, count: 2)
+        ),
+    ]
+
     static func timeText(periodDurationSeconds: Int, playedSeconds: Int) -> String {
         let remaining = periodDurationSeconds - playedSeconds
         if remaining >= 0 {

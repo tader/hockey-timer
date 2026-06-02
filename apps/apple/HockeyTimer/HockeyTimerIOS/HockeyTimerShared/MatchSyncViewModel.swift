@@ -13,13 +13,14 @@ class MatchSyncViewModel: ObservableObject {
     @Published var pendingEventCount: Int = 0
     @Published var lastError: String?
 
-    private let matchId: String
+    private var matchId: String
     private let originPlatform: String
     private let deviceIdKey: String
     private let sequenceKey: String
     private let apiBaseKey: String
     private let defaultApiBase: String
-    private let queueStore: PendingEventStore
+    private let activeMatchIdKey: String?
+    private var queueStore: PendingEventStore
 
     init(
         matchId: String,
@@ -27,16 +28,19 @@ class MatchSyncViewModel: ObservableObject {
         deviceIdKey: String,
         sequenceKey: String,
         apiBaseKey: String,
-        defaultApiBase: String
+        defaultApiBase: String,
+        activeMatchIdKey: String? = nil
     ) {
-        self.matchId = matchId
+        let activeMatchId = activeMatchIdKey.flatMap { UserDefaults.standard.string(forKey: $0) } ?? matchId
+        self.matchId = activeMatchId
         self.originPlatform = originPlatform
         self.deviceIdKey = deviceIdKey
         self.sequenceKey = sequenceKey
         self.apiBaseKey = apiBaseKey
         self.defaultApiBase = defaultApiBase
+        self.activeMatchIdKey = activeMatchIdKey
         self.queueStore = PendingEventStore(
-            key: "hockeytimer.pending-events.\(originPlatform).\(matchId)"
+            key: "hockeytimer.pending-events.\(originPlatform).\(activeMatchId)"
         )
 
         Task {
@@ -145,50 +149,74 @@ class MatchSyncViewModel: ObservableObject {
     func endMatch() { push(eventType: "match.ended", payload: .empty) }
 
     func incrementHome() {
-        push(eventType: "score.changed", payload: MatchEventPayload(team: "home", delta: 1, reason: "goal"))
+        push(eventType: "score.changed", payload: .score(team: "home", delta: 1, reason: "goal"))
     }
 
     func incrementAway() {
-        push(eventType: "score.changed", payload: MatchEventPayload(team: "away", delta: 1, reason: "goal"))
+        push(eventType: "score.changed", payload: .score(team: "away", delta: 1, reason: "goal"))
     }
 
     func decrementHome() {
-        push(eventType: "score.changed", payload: MatchEventPayload(team: "home", delta: -1, reason: "correction"))
+        push(eventType: "score.changed", payload: .score(team: "home", delta: -1, reason: "correction"))
     }
 
     func decrementAway() {
-        push(eventType: "score.changed", payload: MatchEventPayload(team: "away", delta: -1, reason: "correction"))
+        push(eventType: "score.changed", payload: .score(team: "away", delta: -1, reason: "correction"))
     }
 
     func resetScore() {
         if homeScore != 0 {
-            push(eventType: "score.changed", payload: MatchEventPayload(team: "home", delta: -homeScore, reason: "correction"))
+            push(eventType: "score.changed", payload: .score(team: "home", delta: -homeScore, reason: "correction"))
         }
 
         if awayScore != 0 {
-            push(eventType: "score.changed", payload: MatchEventPayload(team: "away", delta: -awayScore, reason: "correction"))
+            push(eventType: "score.changed", payload: .score(team: "away", delta: -awayScore, reason: "correction"))
         }
     }
 
-    private func push(eventType: String, payload: MatchEventPayload) {
-        let event = MatchEventDTO(
-            eventId: UUID().uuidString.lowercased(),
-            matchId: matchId,
-            eventType: eventType,
-            occurredAt: ISO8601DateFormatter().string(from: Date()),
-            originDeviceId: deviceId(),
-            originPlatform: originPlatform,
-            sequence: nextSequence(),
-            payload: payload,
-            version: 1
+    func createQuickMatch(format: WatchMatchFormat = WatchPresentation.defaultNewMatchFormat) {
+        let newMatchId = "watch-\(UUID().uuidString.lowercased())"
+        let newQueueStore = PendingEventStore(
+            key: "hockeytimer.pending-events.\(originPlatform).\(newMatchId)"
         )
+        matchId = newMatchId
+        if let activeMatchIdKey {
+            UserDefaults.standard.set(newMatchId, forKey: activeMatchIdKey)
+        }
+        queueStore = newQueueStore
+
+        homeScore = 0
+        awayScore = 0
+        isRunning = false
+        isEnded = false
+        currentPeriod = 1
+        currentPeriodPlayedSeconds = 0
+        periodCount = format.periodCount
+        periodDurationSeconds = format.periodDurationSeconds.first ?? 0
+        lastError = nil
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let events = [
+            makeEvent(eventType: "match.created", payload: .empty, matchId: newMatchId, occurredAt: now),
+            makeEvent(
+                eventType: "match.format.updated",
+                payload: .format(
+                    periodCount: format.periodCount,
+                    periodDurationSeconds: format.periodDurationSeconds
+                ),
+                matchId: newMatchId,
+                occurredAt: now
+            ),
+        ]
 
         Task {
-            await queueStore.append(event)
+            for event in events {
+                await newQueueStore.append(event)
+            }
             await updatePendingEventCount()
 
             do {
-                try await flushQueuedEvents()
+                try await flushQueuedEvents(from: newQueueStore, for: newMatchId)
                 refreshProjection()
             } catch {
                 await MainActor.run {
@@ -198,18 +226,72 @@ class MatchSyncViewModel: ObservableObject {
         }
     }
 
+    private func push(eventType: String, payload: MatchEventPayload) {
+        let eventMatchId = matchId
+        let eventQueueStore = queueStore
+        let event = makeEvent(
+            eventType: eventType,
+            payload: payload,
+            matchId: eventMatchId,
+            occurredAt: ISO8601DateFormatter().string(from: Date())
+        )
+
+        Task {
+            await eventQueueStore.append(event)
+            if eventMatchId == matchId {
+                await updatePendingEventCount()
+            }
+
+            do {
+                try await flushQueuedEvents(from: eventQueueStore, for: eventMatchId)
+                if eventMatchId == matchId {
+                    refreshProjection()
+                }
+            } catch {
+                if eventMatchId == matchId {
+                    await MainActor.run {
+                        lastError = error.localizedDescription
+                    }
+                }
+            }
+        }
+    }
+
+    private func makeEvent(
+        eventType: String,
+        payload: MatchEventPayload,
+        matchId: String,
+        occurredAt: String
+    ) -> MatchEventDTO {
+        MatchEventDTO(
+            eventId: UUID().uuidString.lowercased(),
+            matchId: matchId,
+            eventType: eventType,
+            occurredAt: occurredAt,
+            originDeviceId: deviceId(),
+            originPlatform: originPlatform,
+            sequence: nextSequence(),
+            payload: payload,
+            version: 1
+        )
+    }
+
     private func flushQueuedEvents() async throws {
-        let events = await queueStore.load()
+        try await flushQueuedEvents(from: queueStore, for: matchId)
+    }
+
+    private func flushQueuedEvents(from store: PendingEventStore, for matchId: String) async throws {
+        let events = await store.load()
         guard !events.isEmpty else {
             return
         }
 
-        try await pushEvents(events)
-        await queueStore.clear()
+        try await pushEvents(events, matchId: matchId)
+        await store.clear()
         await updatePendingEventCount()
     }
 
-    private func pushEvents(_ events: [MatchEventDTO]) async throws {
+    private func pushEvents(_ events: [MatchEventDTO], matchId: String) async throws {
         guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/events:batchUpsert") else {
             return
         }

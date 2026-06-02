@@ -39,6 +39,12 @@ struct WatchPresentationTests {
             "final period remains startable"
         )
 
+        assertEqual(
+            WatchPresentation.primaryNewMatchFormatLabel,
+            "4 x 17½",
+            "primary quick new-match format is prominent field-hockey default"
+        )
+
         print("watch presentation tests passed")
     }
 

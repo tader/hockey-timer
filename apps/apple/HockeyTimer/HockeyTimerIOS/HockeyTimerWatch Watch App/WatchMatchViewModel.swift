@@ -8,7 +8,8 @@ final class WatchMatchViewModel: MatchSyncViewModel {
             deviceIdKey: "hockey_timer_watch_device_id",
             sequenceKey: "hockey_timer_watch_sequence",
             apiBaseKey: "hockey_timer_api_base",
-            defaultApiBase: "http://192.168.1.153:8787"
+            defaultApiBase: "http://192.168.1.153:8787",
+            activeMatchIdKey: "hockey_timer_watch_active_match_id"
         )
     }
 }

@@ -35,10 +35,10 @@ struct AdminTabView: View {
                     )
                 } else {
                     labeledIconButton(
-                        icon: "play.fill",
-                        label: "Start",
+                        icon: model.isEnded ? "plus" : "play.fill",
+                        label: model.isEnded ? "New Match" : "Start",
                         tint: .green,
-                        disabled: model.isEnded,
+                        disabled: false,
                         action: startPeriod
                     )
                 }
@@ -88,6 +88,11 @@ struct AdminTabView: View {
     }
 
     private func startPeriod() {
+        if model.isEnded {
+            model.createQuickMatch()
+            return
+        }
+
         if model.currentPeriod == 1 && model.currentPeriodPlayedSeconds == 0 {
             model.start()
         } else {

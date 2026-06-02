@@ -19,8 +19,36 @@ struct MatchEventPayload: Codable {
     let team: String?
     let delta: Int?
     let reason: String?
+    let periodCount: Int?
+    let periodDurationSeconds: [Int]?
 
-    static let empty = MatchEventPayload(team: nil, delta: nil, reason: nil)
+    static let empty = MatchEventPayload(
+        team: nil,
+        delta: nil,
+        reason: nil,
+        periodCount: nil,
+        periodDurationSeconds: nil
+    )
+
+    static func score(team: String, delta: Int, reason: String) -> MatchEventPayload {
+        MatchEventPayload(
+            team: team,
+            delta: delta,
+            reason: reason,
+            periodCount: nil,
+            periodDurationSeconds: nil
+        )
+    }
+
+    static func format(periodCount: Int, periodDurationSeconds: [Int]) -> MatchEventPayload {
+        MatchEventPayload(
+            team: nil,
+            delta: nil,
+            reason: nil,
+            periodCount: periodCount,
+            periodDurationSeconds: periodDurationSeconds
+        )
+    }
 }
 
 struct MatchEventDTO: Codable {
