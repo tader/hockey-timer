@@ -20,6 +20,7 @@
     must use local projection first, with sync as background convergence only.
 13. Apple API configuration ownership clarified: iPhone is primary; watch manual
     API editing is removed from watch UI.
+14. Apple Justfile device install and paired simulator launcher commands added.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
