@@ -26,6 +26,7 @@ Install on paired physical devices with Just:
 - `just install` installs both apps.
 
 Simulator:
-- `just sim` boots the paired iPhone 17 Pro + Apple Watch simulator. If no
-  iPhone 17 Pro pair exists yet, it creates one with an available unpaired
-  Apple Watch simulator.
+- `just sim` boots the paired iPhone 17 Pro + Apple Watch simulator, builds the
+  simulator apps, installs both apps, and launches both apps. If no iPhone 17
+  Pro pair exists yet, it creates one with an available unpaired Apple Watch
+  simulator.

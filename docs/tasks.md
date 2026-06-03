@@ -21,6 +21,8 @@
 13. Apple API configuration ownership clarified: iPhone is primary; watch manual
     API editing is removed from watch UI.
 14. Apple Justfile device install and paired simulator launcher commands added.
+15. `just sim` launch gap fixed: original target booted the simulator pair only,
+    so neither app was installed or launched on the iPhone/watch simulators.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

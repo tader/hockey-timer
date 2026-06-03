@@ -7,9 +7,13 @@ derived_ios := "/tmp/HockeyTimerDerivedData-ios"
 derived_watch := "/tmp/HockeyTimerDerivedData-watch"
 derived_install_ios := "/tmp/HockeyTimerDerivedData-install-ios"
 derived_install_watch := "/tmp/HockeyTimerDerivedData-install-watch"
+derived_sim_ios := "/tmp/HockeyTimerDerivedData-sim-ios"
+derived_sim_watch := "/tmp/HockeyTimerDerivedData-sim-watch"
 iphone_device := "1141CA4B-F44F-55A6-967A-E61ECA88B38E"
 watch_device := "25CED29A-60BD-5609-BA9F-21EA516A4291"
 sim_phone_name := "iPhone 17 Pro"
+ios_bundle_id := "nl.thomsoft.HockeyTimerIOS"
+watch_bundle_id := "nl.thomsoft.HockeyTimerIOS.watchkitapp"
 
 default:
   @just --list
@@ -105,6 +109,13 @@ sim:
   xcrun simctl bootstatus "$phone_id" -b
   open -a Simulator --args -CurrentDeviceUDID "$phone_id"
   open -a Simulator --args -CurrentDeviceUDID "$watch_id"
+  rm -rf "{{derived_sim_ios}}" "{{derived_sim_watch}}"
+  xcodebuild -project "{{project}}" -scheme "{{ios_scheme}}" -configuration Debug -destination "id=$phone_id" -derivedDataPath "{{derived_sim_ios}}" CODE_SIGNING_ALLOWED=NO build
+  xcrun simctl install "$phone_id" "{{derived_sim_ios}}/Build/Products/Debug-iphonesimulator/HockeyTimerIOS.app"
+  xcrun simctl launch "$phone_id" "{{ios_bundle_id}}"
+  xcodebuild -project "{{project}}" -scheme "{{watch_scheme}}" -configuration Debug -destination "id=$watch_id" -derivedDataPath "{{derived_sim_watch}}" CODE_SIGNING_ALLOWED=NO build
+  xcrun simctl install "$watch_id" "{{derived_sim_watch}}/Build/Products/Debug-watchsimulator/HockeyTimerWatch Watch App.app"
+  xcrun simctl launch "$watch_id" "{{watch_bundle_id}}"
 
 # Starts Vite dev server with hot reload for the web app.
 dev-web:
