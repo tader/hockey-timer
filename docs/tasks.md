@@ -23,6 +23,7 @@
 14. Apple Justfile device install and paired simulator launcher commands added.
 15. `just sim` launch gap fixed: original target booted the simulator pair only,
     so neither app was installed or launched on the iPhone/watch simulators.
+16. Production Docker Compose entrypoint added for API and web frontend.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

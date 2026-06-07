@@ -86,6 +86,14 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
 4. Open:
    - `http://localhost:4173`
 
+## Production Compose Run
+- Build and start API + web frontend:
+  - `docker-compose -f compose.yaml up --build`
+- Open:
+  - `http://localhost:4173`
+- API:
+  - `http://localhost:8787`
+
 ## Apple Build Commands
 - List available build recipes:
   - `just --list`

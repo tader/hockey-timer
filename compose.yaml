@@ -1,0 +1,54 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:22-alpine
+        WORKDIR /app
+        ENV NODE_ENV=production
+        COPY backend/services/events/local-server.mjs backend/services/events/local-server.mjs
+        EXPOSE 8787
+        CMD ["node", "backend/services/events/local-server.mjs"]
+    environment:
+      PORT: "8787"
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8787/matches/health/projection >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  web:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:22-alpine AS build
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        COPY tsconfig.base.json ./
+        COPY apps/web/package.json apps/web/package.json
+        COPY backend/services/events/package.json backend/services/events/package.json
+        COPY shared/event-schema/package.json shared/event-schema/package.json
+        COPY shared/replay-engine/package.json shared/replay-engine/package.json
+        RUN npm ci
+        COPY apps/web apps/web
+        RUN npm run build:web
+
+        FROM nginx:1.27-alpine
+        COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+        EXPOSE 80
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "4173:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
