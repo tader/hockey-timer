@@ -7,10 +7,11 @@
   "types": "dist/handlers.d.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types test/**/*.test.ts"
+    "test": "node --test --experimental-strip-types test/**/*.test.ts test/**/*.test.mjs"
   },
   "dependencies": {
     "@hockey-timer/event-schema": "0.1.0",
-    "@hockey-timer/replay-engine": "0.1.0"
+    "@hockey-timer/replay-engine": "0.1.0",
+    "pg": "^8.21.0"
   }
 }

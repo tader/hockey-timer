@@ -15,6 +15,15 @@
   - CloudWatch/X-Ray for observability
 
 ## Data Layer (Proposed)
+- Local/demo API persistence:
+  - SQLite is the default store for developer runs.
+  - Default file path: `data/hockey-timer.sqlite`.
+  - Containerized SQLite runs should mount `/data` and set
+    `SQLITE_PATH=/data/hockey-timer.sqlite`.
+- Production Compose persistence:
+  - PostgreSQL service `db`.
+  - API uses `STORAGE_DRIVER=postgres` and `DATABASE_URL`.
+  - Event idempotency is enforced by a primary key on `eventId`.
 - `MatchEvents` table:
   - PK: `matchId`
   - SK: event ordering key

@@ -1,11 +1,12 @@
 import http from "node:http";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8787);
 const KNHB_BASE = "https://publicaties.hockeyweerelt.nl/mc";
 
-const eventsByMatch = new Map();
-const seenEventIds = new Set();
+let eventStore;
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -18,6 +19,133 @@ function sortEvents(events) {
     const bk = `${b.originDeviceId}:${String(b.sequence).padStart(12, "0")}`;
     return ak.localeCompare(bk);
   });
+}
+
+async function createSqliteStore() {
+  const sqlitePath = process.env.SQLITE_PATH || "data/hockey-timer.sqlite";
+  await mkdir(dirname(sqlitePath), { recursive: true });
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(sqlitePath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS match_events (
+      event_id TEXT PRIMARY KEY,
+      match_id TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      origin_device_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      event_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_match_events_match_order
+      ON match_events (match_id, occurred_at, origin_device_id, sequence);
+  `);
+
+  const insert = db.prepare(`
+    INSERT INTO match_events (event_id, match_id, occurred_at, origin_device_id, sequence, event_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const selectByMatch = db.prepare(`
+    SELECT event_json
+    FROM match_events
+    WHERE match_id = ?
+    ORDER BY occurred_at, origin_device_id, sequence
+  `);
+
+  return {
+    async upsertEvents(events) {
+      let inserted = 0;
+      let duplicates = 0;
+      for (const event of events) {
+        try {
+          insert.run(
+            event.eventId,
+            event.matchId,
+            event.occurredAt,
+            event.originDeviceId || "",
+            Number(event.sequence || 0),
+            JSON.stringify(event),
+          );
+          inserted += 1;
+        } catch (error) {
+          if (String(error?.message || "").includes("UNIQUE constraint failed")) {
+            duplicates += 1;
+            continue;
+          }
+          throw error;
+        }
+      }
+      return { inserted, duplicates };
+    },
+    async getEvents(matchId) {
+      return selectByMatch.all(matchId).map((row) => JSON.parse(row.event_json));
+    },
+  };
+}
+
+async function createPostgresStore() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error("DATABASE_URL is required when STORAGE_DRIVER=postgres");
+
+  const { default: pg } = await import("pg");
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS match_events (
+      event_id TEXT PRIMARY KEY,
+      match_id TEXT NOT NULL,
+      occurred_at TIMESTAMPTZ NOT NULL,
+      origin_device_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      event_json JSONB NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_match_events_match_order
+      ON match_events (match_id, occurred_at, origin_device_id, sequence);
+  `);
+
+  return {
+    async upsertEvents(events) {
+      let inserted = 0;
+      let duplicates = 0;
+      for (const event of events) {
+        const result = await pool.query(
+          `
+            INSERT INTO match_events (event_id, match_id, occurred_at, origin_device_id, sequence, event_json)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+            ON CONFLICT (event_id) DO NOTHING
+            RETURNING event_id
+          `,
+          [
+            event.eventId,
+            event.matchId,
+            event.occurredAt,
+            event.originDeviceId || "",
+            Number(event.sequence || 0),
+            JSON.stringify(event),
+          ],
+        );
+        if (result.rowCount === 1) inserted += 1;
+        else duplicates += 1;
+      }
+      return { inserted, duplicates };
+    },
+    async getEvents(matchId) {
+      const result = await pool.query(
+        `
+          SELECT event_json
+          FROM match_events
+          WHERE match_id = $1
+          ORDER BY occurred_at, origin_device_id, sequence
+        `,
+        [matchId],
+      );
+      return result.rows.map((row) => row.event_json);
+    },
+  };
+}
+
+async function createEventStore() {
+  const driver = process.env.STORAGE_DRIVER || "sqlite";
+  if (driver === "sqlite") return createSqliteStore();
+  if (driver === "postgres") return createPostgresStore();
+  throw new Error(`unsupported STORAGE_DRIVER: ${driver}`);
 }
 
 function replayMatch(events, matchId) {
@@ -110,23 +238,6 @@ function validateEvent(event) {
   return issues;
 }
 
-function upsertEvents(events) {
-  let inserted = 0;
-  let duplicates = 0;
-  for (const event of events) {
-    if (seenEventIds.has(event.eventId)) {
-      duplicates += 1;
-      continue;
-    }
-    seenEventIds.add(event.eventId);
-    const current = eventsByMatch.get(event.matchId) || [];
-    current.push(event);
-    eventsByMatch.set(event.matchId, current);
-    inserted += 1;
-  }
-  return { inserted, duplicates };
-}
-
 async function readJson(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -208,8 +319,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const result = upsertEvents(events);
-    const ordered = sortEvents(eventsByMatch.get(matchId) || []);
+    const result = await eventStore.upsertEvents(events);
+    const ordered = sortEvents(await eventStore.getEvents(matchId));
     sendJson(res, 200, {
       ...result,
       totalKnownEvents: ordered.length,
@@ -221,7 +332,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && eventsMatch) {
     const matchId = decodeURIComponent(eventsMatch[1]);
     const since = url.searchParams.get("since") || undefined;
-    const ordered = sortEvents(eventsByMatch.get(matchId) || []);
+    const ordered = sortEvents(await eventStore.getEvents(matchId));
     const filtered = since ? ordered.filter((item) => item.occurredAt > since) : ordered;
     sendJson(res, 200, {
       matchId,
@@ -233,7 +344,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && projectionMatch) {
     const matchId = decodeURIComponent(projectionMatch[1]);
-    const projection = replayMatch(eventsByMatch.get(matchId) || [], matchId);
+    const projection = replayMatch(await eventStore.getEvents(matchId), matchId);
     sendJson(res, 200, projection);
     return;
   }
@@ -263,6 +374,8 @@ const server = http.createServer(async (req, res) => {
 
   sendJson(res, 404, { error: "not found" });
 });
+
+eventStore = await createEventStore();
 
 server.listen(PORT, () => {
   console.log(`events service listening on http://localhost:${PORT}`);

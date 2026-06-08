@@ -120,3 +120,16 @@ Track decisions required before implementation. Use status:
 - Decision: Show remaining period time as countdown by default. After period
   time reaches zero, continue showing overtime as `+MM:SS over`. `End Period`
   must work even if timer was never started. `End Match` must always be available.
+
+## D-012: Local and Production API Persistence
+- Status: `decided`
+- Context: The hosted API must survive container restarts, while development
+  should remain simple and local.
+- Options:
+  - Keep in-memory storage for MVP demo only.
+  - Use SQLite everywhere.
+  - Use SQLite for development and PostgreSQL for production hosting.
+- Decision: Use SQLite as the default development store and PostgreSQL for the
+  production Compose stack. The API selects the store via `STORAGE_DRIVER`.
+  SQLite uses `SQLITE_PATH`; production Compose runs a `db` container and points
+  the API at it with `DATABASE_URL`.

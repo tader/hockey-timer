@@ -1,4 +1,5 @@
 set shell := ["zsh", "-lc"]
+set dotenv-load := true
 
 project := "apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerIOS.xcodeproj"
 ios_scheme := "HockeyTimerIOS"
@@ -9,8 +10,8 @@ derived_install_ios := "/tmp/HockeyTimerDerivedData-install-ios"
 derived_install_watch := "/tmp/HockeyTimerDerivedData-install-watch"
 derived_sim_ios := "/tmp/HockeyTimerDerivedData-sim-ios"
 derived_sim_watch := "/tmp/HockeyTimerDerivedData-sim-watch"
-iphone_device := "1141CA4B-F44F-55A6-967A-E61ECA88B38E"
-watch_device := "25CED29A-60BD-5609-BA9F-21EA516A4291"
+iphone_device := env_var_or_default("HOCKEY_TIMER_IPHONE_DEVICE_ID", "")
+watch_device := env_var_or_default("HOCKEY_TIMER_WATCH_DEVICE_ID", "")
 sim_phone_name := "iPhone 17 Pro"
 ios_bundle_id := "nl.thomsoft.HockeyTimerIOS"
 watch_bundle_id := "nl.thomsoft.HockeyTimerIOS.watchkitapp"
@@ -58,11 +59,13 @@ install target="all":
   esac
 
 _install-phone:
+  test -n "{{iphone_device}}" || (echo "Set HOCKEY_TIMER_IPHONE_DEVICE_ID in .env or environment" >&2; exit 64)
   rm -rf "{{derived_install_ios}}"
   xcodebuild -project "{{project}}" -scheme "{{ios_scheme}}" -configuration Debug -destination "id={{iphone_device}}" -derivedDataPath "{{derived_install_ios}}" build
   xcrun devicectl device install app --device "{{iphone_device}}" "{{derived_install_ios}}/Build/Products/Debug-iphoneos/HockeyTimerIOS.app"
 
 _install-watch:
+  test -n "{{watch_device}}" || (echo "Set HOCKEY_TIMER_WATCH_DEVICE_ID in .env or environment" >&2; exit 64)
   rm -rf "{{derived_install_watch}}"
   xcodebuild -project "{{project}}" -scheme "{{watch_scheme}}" -configuration Debug -destination "id={{watch_device}}" -derivedDataPath "{{derived_install_watch}}" build
   xcrun devicectl device install app --device "{{watch_device}}" "{{derived_install_watch}}/Build/Products/Debug-watchos/HockeyTimerWatch Watch App.app"

@@ -24,6 +24,10 @@
 15. `just sim` launch gap fixed: original target booted the simulator pair only,
     so neither app was installed or launched on the iPhone/watch simulators.
 16. Production Docker Compose entrypoint added for API and web frontend.
+17. API persistence target selected: SQLite for development, PostgreSQL for
+    production Compose hosting.
+18. Physical Apple device IDs moved out of `Justfile` into environment/.env
+    configuration.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

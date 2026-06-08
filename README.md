@@ -93,6 +93,19 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
   - `http://localhost:4173`
 - API:
   - `http://localhost:8787`
+- API state:
+  - Production Compose stores events in PostgreSQL volume `api-db-data`.
+  - SQLite development storage defaults to `data/hockey-timer.sqlite`.
+  - For containerized SQLite, mount persistent storage at `/data` and set
+    `SQLITE_PATH=/data/hockey-timer.sqlite`.
+
+## Device Install Configuration
+- Copy `.env.example` to `.env`.
+- Set:
+  - `HOCKEY_TIMER_IPHONE_DEVICE_ID`
+  - `HOCKEY_TIMER_WATCH_DEVICE_ID`
+- `just install phone`, `just install watch`, and `just install` read those
+  values from environment or `.env`.
 
 ## Apple Build Commands
 - List available build recipes:
