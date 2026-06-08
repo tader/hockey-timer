@@ -29,6 +29,9 @@
 18. Physical Apple device IDs moved out of `Justfile` into environment/.env
     configuration.
 19. Web frontend API base URL made runtime-configurable for production hosting.
+20. Web runtime API config load order fixed: Vite moved module scripts ahead of
+    body scripts, so `/config.js` must be in the document head before the app
+    bundle.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
