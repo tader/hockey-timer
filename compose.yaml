@@ -66,9 +66,12 @@ services:
         FROM nginx:1.27-alpine
         COPY --from=build /app/apps/web/dist /usr/share/nginx/html
         EXPOSE 80
+        CMD ["/bin/sh", "-c", "printf 'globalThis.__API_BASE__ = \"%s\";\\n' \"$${WEB_API_BASE:-http://localhost:8787}\" > /usr/share/nginx/html/config.js && nginx -g 'daemon off;'"]
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      WEB_API_BASE: ${WEB_API_BASE:-http://localhost:8787}
     ports:
       - "4173:80"
     restart: unless-stopped

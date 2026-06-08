@@ -93,6 +93,9 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
   - `http://localhost:4173`
 - API:
   - `http://localhost:8787`
+- Web API URL:
+  - Set `WEB_API_BASE` before starting Compose.
+  - Default: `http://localhost:8787`
 - API state:
   - Production Compose stores events in PostgreSQL volume `api-db-data`.
   - SQLite development storage defaults to `data/hockey-timer.sqlite`.

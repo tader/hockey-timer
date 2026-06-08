@@ -28,6 +28,7 @@
     production Compose hosting.
 18. Physical Apple device IDs moved out of `Justfile` into environment/.env
     configuration.
+19. Web frontend API base URL made runtime-configurable for production hosting.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
