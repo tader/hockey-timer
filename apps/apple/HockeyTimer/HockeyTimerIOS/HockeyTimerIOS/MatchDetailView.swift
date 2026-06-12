@@ -5,17 +5,20 @@ struct MatchDetailView: View {
     @State private var editableMatch: MatchListItem
     @StateObject private var model: IOSMatchViewModel
     let onMetadataSaved: ((MatchListItem) -> Void)?
+    private let isInjectedModel: Bool
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     @State private var apiBaseDraft = ""
     @State private var isEditingMetadata = false
 
     init(
         match: MatchListItem = MatchListItem(id: "demo-match", source: "local", homeTeam: "Home", awayTeam: "Away"),
+        model: IOSMatchViewModel? = nil,
         onMetadataSaved: ((MatchListItem) -> Void)? = nil
     ) {
         _editableMatch = State(initialValue: match)
         self.onMetadataSaved = onMetadataSaved
-        _model = StateObject(wrappedValue: IOSMatchViewModel(matchId: match.id))
+        isInjectedModel = model != nil
+        _model = StateObject(wrappedValue: model ?? IOSMatchViewModel(matchId: match.id))
     }
 
     var body: some View {
@@ -87,7 +90,9 @@ struct MatchDetailView: View {
             NavigationStack {
                 MatchMetadataEditorView(title: "Edit Match", match: editableMatch) { updated in
                     editableMatch = updated
-                    MatchStore.shared.upsert(updated)
+                    if !isInjectedModel {
+                        MatchStore.shared.upsert(updated)
+                    }
                     onMetadataSaved?(updated)
                 }
             }
@@ -99,5 +104,23 @@ struct MatchDetailView: View {
         .onReceive(poller) { _ in
             model.refreshProjection()
         }
+    }
+}
+
+#Preview("MatchDetailView populated") {
+    NavigationStack {
+        MatchDetailView(
+            match: IOSPreviewFixtures.matches[1],
+            model: IOSMatchViewModel.preview(
+                homeScore: 3,
+                awayScore: 2,
+                isRunning: true,
+                currentPeriod: 3,
+                currentPeriodPlayedSeconds: 6 * 60 + 14,
+                pendingEventCount: 1,
+                runningStartedAt: IOSPreviewFixtures.createdAt,
+                previewApiBase: "https://preview.hockey-timer.invalid"
+            )
+        )
     }
 }

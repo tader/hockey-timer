@@ -108,12 +108,18 @@ enum MatchListSheet: String, Identifiable {
 }
 
 struct MatchListView: View {
-    @State private var matches: [MatchListItem] = []
+    @State private var matches: [MatchListItem]
     @State private var activeSheet: MatchListSheet?
     @State private var filterHome = ""
     @State private var filterAway = ""
     @State private var filterClub = ""
     @State private var filterTeam = ""
+    private let isInjected: Bool
+
+    init(matches: [MatchListItem]? = nil) {
+        _matches = State(initialValue: matches ?? [])
+        isInjected = matches != nil
+    }
 
     var body: some View {
         List {
@@ -135,8 +141,15 @@ struct MatchListView: View {
             Section("Public Matches") {
                 ForEach(filteredAndSortedMatches) { match in
                     NavigationLink {
-                        MatchDetailView(match: match) { _ in
-                            matches = MatchStore.shared.load()
+                        MatchDetailView(
+                            match: match,
+                            model: isInjected ? IOSMatchViewModel.preview() : nil
+                        ) { updated in
+                            if isInjected {
+                                upsertInMemory(updated)
+                            } else {
+                                matches = MatchStore.shared.load()
+                            }
                         }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
@@ -169,30 +182,53 @@ struct MatchListView: View {
                 NavigationStack {
                     MatchMetadataEditorView(
                         title: "New Match",
-                        match: MatchListItem(
-                            id: "custom-\(UUID().uuidString.lowercased())",
-                            source: "custom",
-                            homeTeam: "Home",
-                            awayTeam: "Away"
-                        )
+                        match: isInjected
+                            ? IOSPreviewFixtures.matches[0]
+                            : MatchListItem(
+                                id: "custom-\(UUID().uuidString.lowercased())",
+                                source: "custom",
+                                homeTeam: "Home",
+                                awayTeam: "Away"
+                            )
                     ) { created in
-                        MatchStore.shared.upsert(created)
-                        matches = MatchStore.shared.load()
+                        if isInjected {
+                            upsertInMemory(created)
+                        } else {
+                            MatchStore.shared.upsert(created)
+                            matches = MatchStore.shared.load()
+                        }
                         activeSheet = nil
                     }
                 }
             case .knhb:
                 NavigationStack {
-                    KNHBBrowserView { imported in
-                        MatchStore.shared.upsert(imported)
-                        matches = MatchStore.shared.load()
+                    KNHBBrowserView(
+                        model: isInjected ? KNHBBrowserViewModel.preview() : nil,
+                        initialFavorites: isInjected ? [IOSPreviewFixtures.favorite] : nil
+                    ) { imported in
+                        if isInjected {
+                            upsertInMemory(imported)
+                        } else {
+                            MatchStore.shared.upsert(imported)
+                            matches = MatchStore.shared.load()
+                        }
                         activeSheet = nil
                     }
                 }
             }
         }
         .onAppear {
-            matches = MatchStore.shared.load()
+            if !isInjected {
+                matches = MatchStore.shared.load()
+            }
+        }
+    }
+
+    private func upsertInMemory(_ match: MatchListItem) {
+        if let index = matches.firstIndex(where: { $0.id == match.id }) {
+            matches[index] = match
+        } else {
+            matches.append(match)
         }
     }
 
@@ -334,5 +370,21 @@ enum MatchDateFormatters {
 
     static func display(_ date: Date) -> String {
         list.string(from: date)
+    }
+}
+
+#Preview("MatchListView populated") {
+    NavigationStack {
+        MatchListView(matches: IOSPreviewFixtures.matches)
+    }
+}
+
+#Preview("MatchMetadataEditorView populated") {
+    NavigationStack {
+        MatchMetadataEditorView(
+            title: "Edit Match",
+            match: IOSPreviewFixtures.matches[1],
+            onSave: { _ in }
+        )
     }
 }
