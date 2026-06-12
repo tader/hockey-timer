@@ -3,16 +3,54 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 apple="$root/apps/apple/HockeyTimer/HockeyTimerIOS"
-views=(MatchListView MatchDetailView MatchMetadataEditorView KNHBBrowserView WatchRootTabView TimeTabView ScoreTabView AdminTabView NewMatchFormatPickerView)
+previews=(
+  "MatchListView|HockeyTimerIOS/MatchListView.swift"
+  "MatchDetailView|HockeyTimerIOS/MatchDetailView.swift"
+  "MatchMetadataEditorView|HockeyTimerIOS/MatchListView.swift"
+  "KNHBBrowserView|HockeyTimerIOS/KNHBBrowserView.swift"
+  "WatchRootTabView|HockeyTimerWatch Watch App/WatchRootTabView.swift"
+  "TimeTabView|HockeyTimerWatch Watch App/TimeTabView.swift"
+  "ScoreTabView|HockeyTimerWatch Watch App/ScoreTabView.swift"
+  "AdminTabView|HockeyTimerWatch Watch App/AdminTabView.swift"
+  "NewMatchFormatPickerView|HockeyTimerWatch Watch App/TimeTabView.swift"
+)
 
-for view in "${views[@]}"; do
-  rg -q "#Preview\(\"$view" "$apple" || {
+for preview in "${previews[@]}"; do
+  view="${preview%%|*}"
+  file="$apple/${preview#*|}"
+  count="$(VIEW="$view" perl -0777 -ne '
+    s{/\*.*?\*/}{}gs;
+    s{//[^\n]*}{}g;
+    $name = quotemeta $ENV{"VIEW"};
+    @matches = /^[ \t]*#Preview\s*\(\s*"$name"\s*(?=[,)])/mg;
+    print scalar @matches;
+  ' "$file")"
+
+  if [[ "$count" -eq 0 ]]; then
     echo "missing preview: $view" >&2
     exit 1
-  }
+  elif [[ "$count" -ne 1 ]]; then
+    echo "duplicate preview: $view ($count found)" >&2
+    exit 1
+  fi
 done
 
-rg -q 'enum IOSPreviewFixtures' "$apple/HockeyTimerIOS"
-rg -q 'static func preview' "$apple/HockeyTimerIOS/IOSMatchViewModel.swift"
-rg -q 'static func preview' "$apple/HockeyTimerWatch Watch App/WatchMatchViewModel.swift"
+perl -0777 -ne '
+  BEGIN { $found = 0; }
+  s{/\*.*?\*/}{}gs;
+  s{//[^\n]*}{}g;
+  $found = 1 if /^[ \t]*enum[ \t]+IOSPreviewFixtures[ \t]*(?=[:{])/m;
+  END { exit($found ? 0 : 1); }
+' "$apple/HockeyTimerIOS"/*.swift
+
+for file in \
+  "$apple/HockeyTimerIOS/IOSMatchViewModel.swift" \
+  "$apple/HockeyTimerWatch Watch App/WatchMatchViewModel.swift"; do
+  perl -0777 -ne '
+    s{/\*.*?\*/}{}gs;
+    s{//[^\n]*}{}g;
+    exit(/\bstatic\s+func\s+preview\s*\(/ ? 0 : 1);
+  ' "$file"
+done
+
 echo "swiftui preview contract tests passed"
