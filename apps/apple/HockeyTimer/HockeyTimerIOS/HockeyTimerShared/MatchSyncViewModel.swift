@@ -22,6 +22,8 @@ class MatchSyncViewModel: ObservableObject {
     private let apiBaseKey: String
     private let defaultApiBase: String
     private let activeMatchIdKey: String?
+    private let isPreview: Bool
+    private let previewApiBase: String?
     private var queueStore: PendingEventStore
     private var localProjectionStore: LocalMatchProjectionStore?
 
@@ -32,9 +34,13 @@ class MatchSyncViewModel: ObservableObject {
         sequenceKey: String,
         apiBaseKey: String,
         defaultApiBase: String,
-        activeMatchIdKey: String? = nil
+        activeMatchIdKey: String? = nil,
+        isPreview: Bool = false,
+        previewApiBase: String? = nil
     ) {
-        let activeMatchId = activeMatchIdKey.flatMap { UserDefaults.standard.string(forKey: $0) } ?? matchId
+        let activeMatchId = isPreview
+            ? matchId
+            : activeMatchIdKey.flatMap { UserDefaults.standard.string(forKey: $0) } ?? matchId
         self.matchId = activeMatchId
         self.originPlatform = originPlatform
         self.deviceIdKey = deviceIdKey
@@ -42,6 +48,8 @@ class MatchSyncViewModel: ObservableObject {
         self.apiBaseKey = apiBaseKey
         self.defaultApiBase = defaultApiBase
         self.activeMatchIdKey = activeMatchIdKey
+        self.isPreview = isPreview
+        self.previewApiBase = previewApiBase
         self.queueStore = PendingEventStore(
             key: "hockeytimer.pending-events.\(originPlatform).\(activeMatchId)"
         )
@@ -51,8 +59,9 @@ class MatchSyncViewModel: ObservableObject {
             )
         }
 
-        loadLocalProjection()
+        guard !isPreview else { return }
 
+        loadLocalProjection()
         Task {
             await updatePendingEventCount()
         }
@@ -116,16 +125,19 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     var currentApiBase: String {
-        UserDefaults.standard.string(forKey: apiBaseKey) ?? defaultApiBase
+        if isPreview { return previewApiBase ?? defaultApiBase }
+        return UserDefaults.standard.string(forKey: apiBaseKey) ?? defaultApiBase
     }
 
     func updateApiBase(_ value: String) {
+        guard !isPreview else { return }
         let sanitized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sanitized.isEmpty else { return }
         UserDefaults.standard.set(sanitized, forKey: apiBaseKey)
     }
 
     func refreshProjection() {
+        guard !isPreview else { return }
         Task {
             do {
                 try? await flushQueuedEvents()
@@ -192,6 +204,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     func createQuickMatch(format: WatchMatchFormat = WatchPresentation.defaultNewMatchFormat) {
+        guard !isPreview else { return }
         let newMatchId = "watch-\(UUID().uuidString.lowercased())"
         let newQueueStore = PendingEventStore(
             key: "hockeytimer.pending-events.\(originPlatform).\(newMatchId)"
@@ -251,6 +264,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func push(eventType: String, payload: MatchEventPayload) {
+        guard !isPreview else { return }
         let eventMatchId = matchId
         let eventQueueStore = queueStore
         let event = makeEvent(
@@ -388,6 +402,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func saveLocalProjection() {
+        guard !isPreview else { return }
         let projection = LocalMatchProjection(
             homeScore: homeScore,
             awayScore: awayScore,
@@ -404,6 +419,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func loadLocalProjection() {
+        guard !isPreview else { return }
         guard let projection = localProjectionStore?.load() else {
             return
         }
@@ -423,10 +439,12 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func flushQueuedEvents() async throws {
+        guard !isPreview else { return }
         try await flushQueuedEvents(from: queueStore, for: matchId)
     }
 
     private func flushQueuedEvents(from store: PendingEventStore, for matchId: String) async throws {
+        guard !isPreview else { return }
         let events = await store.load()
         guard !events.isEmpty else {
             return
@@ -438,6 +456,7 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func pushEvents(_ events: [MatchEventDTO], matchId: String) async throws {
+        guard !isPreview else { return }
         guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/events:batchUpsert") else {
             return
         }
@@ -455,6 +474,9 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func fetchProjection() async throws -> MatchProjectionDTO {
+        guard !isPreview else {
+            throw NSError(domain: "MatchSyncViewModel", code: 4, userInfo: [NSLocalizedDescriptionKey: "Preview projection unavailable"])
+        }
         guard let url = URL(string: "\(currentApiBase)/matches/\(matchId)/projection") else {
             throw NSError(domain: "MatchSyncViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid projection URL"])
         }
@@ -489,10 +511,39 @@ class MatchSyncViewModel: ObservableObject {
     }
 
     private func updatePendingEventCount() async {
+        guard !isPreview else { return }
         let count = await queueStore.count()
         await MainActor.run {
             pendingEventCount = count
         }
+    }
+
+    func seedPreview(
+        homeScore: Int,
+        awayScore: Int,
+        isRunning: Bool,
+        isEnded: Bool,
+        currentPeriod: Int,
+        currentPeriodPlayedSeconds: Int,
+        periodCount: Int,
+        periodDurationSeconds: Int,
+        pendingEventCount: Int = 0,
+        runningStartedAt: Date? = nil,
+        lastError: String? = nil
+    ) {
+        guard isPreview else { return }
+        self.homeScore = homeScore
+        self.awayScore = awayScore
+        self.isRunning = isRunning
+        self.isEnded = isEnded
+        self.currentPeriod = currentPeriod
+        self.currentPeriodPlayedSeconds = currentPeriodPlayedSeconds
+        self.periodCount = periodCount
+        self.periodDurationSeconds = periodDurationSeconds
+        self.periodDurationSecondsByPeriod = Array(repeating: periodDurationSeconds, count: periodCount)
+        self.pendingEventCount = pendingEventCount
+        self.runningStartedAt = runningStartedAt
+        self.lastError = lastError
     }
 }
 
