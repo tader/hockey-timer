@@ -87,7 +87,69 @@ def sanitize(source)
     end
   end
 
+  strip_inactive_blocks(output)
+end
+
+def strip_inactive_blocks(source)
+  output = source.dup
+  stack = []
+  offset = 0
+
+  source.each_line do |line|
+    directive = line.match(/^[ \t]*#(if|elseif|else|endif)\b(?:[ \t]+(.*?))?[ \t]*$/)
+    inactive = stack.any? { |frame| frame[:inactive] }
+
+    if directive
+      command = directive[1]
+      condition = directive[2]&.strip
+      case command
+      when "if"
+        stack << { inactive: inactive || condition == "false", false_branch: condition == "false" }
+      when "elseif"
+        if stack.any? && stack.last[:false_branch]
+          parent_inactive = stack[0...-1].any? { |frame| frame[:inactive] }
+          stack.last[:inactive] = parent_inactive || condition == "false"
+          stack.last[:false_branch] = condition == "false"
+        end
+      when "else"
+        if stack.any? && stack.last[:false_branch]
+          parent_inactive = stack[0...-1].any? { |frame| frame[:inactive] }
+          stack.last[:inactive] = parent_inactive
+          stack.last[:false_branch] = false
+        end
+      when "endif"
+        stack.pop
+      end
+      blank(source, output, offset, offset + line.bytesize)
+    elsif inactive
+      blank(source, output, offset, offset + line.bytesize)
+    end
+
+    offset += line.bytesize
+  end
+
   output
+end
+
+def type_body(source, type_name)
+  declaration = source.match(/\b(?:class|struct|actor)\s+#{Regexp.escape(type_name)}\b/)
+  return unless declaration
+
+  opening = source.index("{", declaration.end(0))
+  return unless opening
+
+  depth = 1
+  index = opening + 1
+  while index < source.bytesize && depth.positive?
+    case source.getbyte(index)
+    when 123 then depth += 1
+    when 125 then depth -= 1
+    end
+    index += 1
+  end
+  return unless depth.zero?
+
+  source.byteslice(opening + 1, index - opening - 2)
 end
 
 def preview_count(source, sanitized, view)
@@ -122,12 +184,13 @@ fixtures = ios_sources.any? do |file|
 end
 exit 1 unless fixtures
 
-factories = [
-  File.join(apple, "HockeyTimerIOS", "IOSMatchViewModel.swift"),
-  File.join(apple, "HockeyTimerWatch Watch App", "WatchMatchViewModel.swift")
-]
-factories.each do |file|
-  exit 1 unless sanitize(File.binread(file)).match?(/\bstatic\s+func\s+preview\s*\(/)
+factories = {
+  "IOSMatchViewModel" => File.join(apple, "HockeyTimerIOS", "IOSMatchViewModel.swift"),
+  "WatchMatchViewModel" => File.join(apple, "HockeyTimerWatch Watch App", "WatchMatchViewModel.swift")
+}
+factories.each do |type_name, file|
+  body = type_body(sanitize(File.binread(file)), type_name)
+  exit 1 unless body&.match?(/\bstatic\s+func\s+preview\s*\(/)
 end
 RUBY
 
