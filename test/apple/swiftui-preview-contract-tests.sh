@@ -19,11 +19,19 @@ for preview in "${previews[@]}"; do
   view="${preview%%|*}"
   file="$apple/${preview#*|}"
   count="$(VIEW="$view" perl -0777 -ne '
-    s{/\*.*?\*/}{}gs;
-    s{//[^\n]*}{}g;
+    $source = $_;
+    @comments = ();
+    while ($source =~ m{/\*.*?(?:\*/|\z)}gs) {
+      push @comments, [$-[0], $+[0]];
+    }
+
     $name = quotemeta $ENV{"VIEW"};
-    @matches = /^[ \t]*#Preview\s*\(\s*"$name"\s*(?=[,)])/mg;
-    print scalar @matches;
+    $count = 0;
+    while ($source =~ /^[ \t]*#Preview\s*\(\s*"$name(?="|[ -])/mg) {
+      $offset = $-[0];
+      $count++ unless grep { $_->[0] <= $offset && $offset < $_->[1] } @comments;
+    }
+    print $count;
   ' "$file")"
 
   if [[ "$count" -eq 0 ]]; then
