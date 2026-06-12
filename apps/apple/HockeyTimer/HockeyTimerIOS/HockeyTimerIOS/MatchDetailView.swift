@@ -5,7 +5,7 @@ struct MatchDetailView: View {
     @State private var editableMatch: MatchListItem
     @StateObject private var model: IOSMatchViewModel
     let onMetadataSaved: ((MatchListItem) -> Void)?
-    private let isInjectedModel: Bool
+    private let persistsMetadata: Bool
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     @State private var apiBaseDraft = ""
     @State private var isEditingMetadata = false
@@ -13,11 +13,12 @@ struct MatchDetailView: View {
     init(
         match: MatchListItem = MatchListItem(id: "demo-match", source: "local", homeTeam: "Home", awayTeam: "Away"),
         model: IOSMatchViewModel? = nil,
+        persistsMetadata: Bool = true,
         onMetadataSaved: ((MatchListItem) -> Void)? = nil
     ) {
         _editableMatch = State(initialValue: match)
         self.onMetadataSaved = onMetadataSaved
-        isInjectedModel = model != nil
+        self.persistsMetadata = persistsMetadata
         _model = StateObject(wrappedValue: model ?? IOSMatchViewModel(matchId: match.id))
     }
 
@@ -90,7 +91,7 @@ struct MatchDetailView: View {
             NavigationStack {
                 MatchMetadataEditorView(title: "Edit Match", match: editableMatch) { updated in
                     editableMatch = updated
-                    if !isInjectedModel {
+                    if persistsMetadata {
                         MatchStore.shared.upsert(updated)
                     }
                     onMetadataSaved?(updated)
@@ -120,7 +121,8 @@ struct MatchDetailView: View {
                 pendingEventCount: 1,
                 runningStartedAt: IOSPreviewFixtures.createdAt,
                 previewApiBase: "https://preview.hockey-timer.invalid"
-            )
+            ),
+            persistsMetadata: false
         )
     }
 }

@@ -114,11 +114,16 @@ struct MatchListView: View {
     @State private var filterAway = ""
     @State private var filterClub = ""
     @State private var filterTeam = ""
-    private let isInjected: Bool
+    private let hasInjectedMatches: Bool
+    private let persistenceEnabled: Bool
 
-    init(matches: [MatchListItem]? = nil) {
+    init(
+        matches: [MatchListItem]? = nil,
+        persistenceEnabled: Bool = true
+    ) {
         _matches = State(initialValue: matches ?? [])
-        isInjected = matches != nil
+        hasInjectedMatches = matches != nil
+        self.persistenceEnabled = persistenceEnabled
     }
 
     var body: some View {
@@ -143,12 +148,13 @@ struct MatchListView: View {
                     NavigationLink {
                         MatchDetailView(
                             match: match,
-                            model: isInjected ? IOSMatchViewModel.preview() : nil
+                            model: persistenceEnabled ? nil : IOSMatchViewModel.preview(),
+                            persistsMetadata: persistenceEnabled
                         ) { updated in
-                            if isInjected {
-                                upsertInMemory(updated)
-                            } else {
+                            if persistenceEnabled {
                                 matches = MatchStore.shared.load()
+                            } else {
+                                upsertInMemory(updated)
                             }
                         }
                     } label: {
@@ -182,20 +188,20 @@ struct MatchListView: View {
                 NavigationStack {
                     MatchMetadataEditorView(
                         title: "New Match",
-                        match: isInjected
-                            ? IOSPreviewFixtures.matches[0]
-                            : MatchListItem(
+                        match: persistenceEnabled
+                            ? MatchListItem(
                                 id: "custom-\(UUID().uuidString.lowercased())",
                                 source: "custom",
                                 homeTeam: "Home",
                                 awayTeam: "Away"
                             )
+                            : IOSPreviewFixtures.matches[0]
                     ) { created in
-                        if isInjected {
-                            upsertInMemory(created)
-                        } else {
+                        if persistenceEnabled {
                             MatchStore.shared.upsert(created)
                             matches = MatchStore.shared.load()
+                        } else {
+                            upsertInMemory(created)
                         }
                         activeSheet = nil
                     }
@@ -203,14 +209,16 @@ struct MatchListView: View {
             case .knhb:
                 NavigationStack {
                     KNHBBrowserView(
-                        model: isInjected ? KNHBBrowserViewModel.preview() : nil,
-                        initialFavorites: isInjected ? [IOSPreviewFixtures.favorite] : nil
+                        model: persistenceEnabled ? nil : KNHBBrowserViewModel.preview(),
+                        initialFavorites: persistenceEnabled ? nil : [IOSPreviewFixtures.favorite],
+                        usesFavoriteStore: persistenceEnabled,
+                        automaticallyLoadsClubs: persistenceEnabled
                     ) { imported in
-                        if isInjected {
-                            upsertInMemory(imported)
-                        } else {
+                        if persistenceEnabled {
                             MatchStore.shared.upsert(imported)
                             matches = MatchStore.shared.load()
+                        } else {
+                            upsertInMemory(imported)
                         }
                         activeSheet = nil
                     }
@@ -218,7 +226,7 @@ struct MatchListView: View {
             }
         }
         .onAppear {
-            if !isInjected {
+            if persistenceEnabled && !hasInjectedMatches {
                 matches = MatchStore.shared.load()
             }
         }
@@ -375,7 +383,10 @@ enum MatchDateFormatters {
 
 #Preview("MatchListView populated") {
     NavigationStack {
-        MatchListView(matches: IOSPreviewFixtures.matches)
+        MatchListView(
+            matches: IOSPreviewFixtures.matches,
+            persistenceEnabled: false
+        )
     }
 }
 

@@ -3,7 +3,7 @@ import Foundation
 enum IOSPreviewFixtures {
     static let createdAt = Date(timeIntervalSince1970: 1_767_268_800)
     static let firstMatchDate = Date(timeIntervalSince1970: 1_768_131_000)
-    static let secondMatchDate = Date(timeIntervalSince1970: 1_768_732_200)
+    static let secondMatchDate = Date(timeIntervalSince1970: 1_768_138_200)
     static let thirdMatchDate = Date(timeIntervalSince1970: 1_769_337_000)
 
     static let matches = [
