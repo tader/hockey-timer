@@ -35,6 +35,11 @@
 21. Apple SwiftUI static previews added for all nine iOS/watchOS views. Preview
     fixtures use deterministic mock data, and preview models suppress network,
     polling side effects, event persistence, and store reads/writes.
+22. Planned watch tab order and API endpoint ownership update: watch pages should
+    read left-to-right as Admin, Time, Score; the timer score controls should
+    use larger rounded tinted buttons that fit two-digit scores; iPhone should
+    be the single API endpoint configuration point and mirror that value to
+    watchOS.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

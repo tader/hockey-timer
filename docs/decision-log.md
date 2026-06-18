@@ -133,3 +133,16 @@ Track decisions required before implementation. Use status:
   production Compose stack. The API selects the store via `STORAGE_DRIVER`.
   SQLite uses `SQLITE_PATH`; production Compose runs a `db` container and points
   the API at it with `DATABASE_URL`.
+
+## D-013: Apple API Endpoint Configuration Ownership
+- Status: `decided`
+- Context: Watch API editing is removed from watch UI, but the watch still needs
+  the same backend endpoint as the iPhone.
+- Options:
+  - Keep separate iPhone and watch `UserDefaults` values.
+  - Configure on iPhone only and mirror to watch with Watch Connectivity.
+  - Configure in a shared cloud profile.
+- Decision: Configure the API endpoint at one point in the iPhone app. The
+  iPhone persists the value locally and mirrors it to the watch with Watch
+  Connectivity application context/messages. The watch accepts the mirrored
+  endpoint and uses it for sync without exposing endpoint editing UI.
