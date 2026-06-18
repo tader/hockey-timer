@@ -11,7 +11,8 @@
 - Duplicate-safe ingestion.
 - Convergent state across watch/phone/web/backend.
 - Conflict behavior that is deterministic and explainable.
-- Support anonymous-first identities and later account-merge without data loss.
+- Support anonymous-first local identities and later managed-account merge
+  without data loss.
 
 ## Proposed Strategy
 
@@ -29,6 +30,7 @@
 
 ## 2) Server-Side
 - API accepts idempotent batched event upserts.
+- API requires authenticated bearer tokens for hosted sync calls.
 - Deduplicate by `eventId` UUID.
 - Persist raw event stream in DynamoDB.
 - Publish accepted events to polling endpoints (MVP transport).
@@ -50,8 +52,13 @@
 
 ## 4.1) Identity and Membership Sync
 - Devices start with local anonymous identity if user is not signed in.
-- On sign-in, run identity merge: attach anonymous-created events/matches to
-  account identity while keeping immutable original event metadata.
+- Native apps can keep working locally without API configuration or sign-in.
+- Web app and hosted API sync require managed federated sign-in.
+- On sign-in, run identity merge: attach anonymous-created events/matches to the
+  managed account identity while keeping immutable original event metadata.
+- Apple Watch does not perform provider sign-in. iPhone owns sign-in and mirrors
+  authenticated sync state to the paired watch; if that state is absent, watch
+  queues events locally.
 - Sync membership/roles alongside events to keep authorization decisions consistent.
 - Join discovery supports location-assisted candidate listing when user grants permission.
 - Public sessions can be joined as `RO` without sign-in.

@@ -17,6 +17,8 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 - Strong offline behavior, especially on watches.
 - Best-effort near-real-time sync with eventual consistency.
 - App must be usable without mandatory sign-in.
+- App must be usable without any configured API endpoint. In that mode, matches
+  remain local/offline-first until the user configures sync and signs in.
 - Apple Watch core match operation must fully function with no phone or internet
   connectivity: create a new match, select format, start/pause/resume/end
   periods, keep running time, adjust score, and end the match.
@@ -128,9 +130,19 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - Supporting services as needed (auth, observability, queueing)
 
 ## Identity, Collaboration, and Permissions
-- Authentication is optional at start (anonymous-first usage).
+- Authentication is optional for local device usage (anonymous-first usage).
+- Authentication is required for hosted API sync and for the web app.
+- Password management must be delegated to managed identity providers. The
+  product should support federated sign-in providers such as Apple ID, Google,
+  GitHub, or another OIDC/OAuth provider instead of storing user passwords.
 - If a user signs in later, merge anonymous/local match data into the signed-in
   account while preserving event history.
+- A signed-in user should see the same account-owned matches in every signed-in
+  surface, including web, iPhone/iPad, and watch after phone-mediated sign-in.
+- Apple Watch sign-in must be initiated on iPhone. A watch paired with a
+  signed-in iPhone should receive usable authenticated sync state automatically.
+- Signing out on iPhone must revoke mirrored watch authenticated API access while
+  preserving watch local-only match operation.
 - Multiple users must be able to join the same match/session.
 - Join should be easy, including location-assisted discovery.
 - Sessions are public by default.

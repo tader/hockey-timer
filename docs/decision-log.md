@@ -66,9 +66,14 @@ Track decisions required before implementation. Use status:
   - AWS Cognito user pools + JWT authorizer in API Gateway.
   - Third-party identity provider (OIDC) + federated backend auth.
   - Initial anonymous/local mode, then authenticated accounts.
-- Decision: Anonymous-first mode is required. Users are not forced to sign in.
-  If a user signs in later, local anonymous data must merge into the selected
-  account without losing match history/events.
+- Decision: Anonymous/local-first mode is required on every device. Users are
+  not forced to sign in, configure an API endpoint, or have network access for
+  local match operation. Any use of hosted API sync or the web app requires an
+  authenticated account. Authentication must be delegated to managed federated
+  identity providers such as Apple, Google, GitHub, or another OIDC/OAuth
+  provider; this product must not own password management. If a user signs in
+  later, local anonymous match data must merge into the signed-in account
+  without losing event history.
 
 ## D-007: Match Collaboration, Join, and Permissions
 - Status: `decided`
@@ -146,3 +151,18 @@ Track decisions required before implementation. Use status:
   iPhone persists the value locally and mirrors it to the watch with Watch
   Connectivity application context/messages. The watch accepts the mirrored
   endpoint and uses it for sync without exposing endpoint editing UI.
+
+## D-014: Apple Watch Authentication Ownership
+- Status: `decided`
+- Context: Watch text entry and provider sign-in flows are poor fit for match
+  operation, but the watch needs authenticated API access when syncing through
+  the hosted backend.
+- Options:
+  - Sign in independently on watch.
+  - Require phone-mediated sign-in and mirror auth state to watch.
+  - Let watch use unauthenticated API access.
+- Decision: Sign-in for Apple Watch is owned by the iPhone companion app. If the
+  user signs in on iPhone, the watch should become signed in automatically for
+  API sync using phone-mediated session/token handoff through Watch
+  Connectivity. The watch must keep full local-only match operation available
+  when no phone, account, API endpoint, or network is available.

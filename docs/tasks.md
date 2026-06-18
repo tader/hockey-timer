@@ -39,6 +39,10 @@
     left-to-right as Admin, Time, Score; timer score controls use larger rounded
     tinted buttons sized for two-digit scores; iPhone is the single API endpoint
     configuration point and mirrors that value to watchOS.
+23. Authentication direction clarified: every native app remains usable locally
+    without API configuration or sign-in; hosted API and web app usage require
+    managed federated sign-in; iPhone owns Apple Watch sign-in and mirrors
+    authenticated sync state to the paired watch.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
@@ -47,7 +51,7 @@
 4. Finalize architecture decisions for serverless backend.
 5. Define MVP scope (Apple Watch + iPhone + web + backend).
 6. Approve implementation plan and milestone breakdown.
-7. Finalize anonymous-first identity merge flow.
+7. Finalize anonymous-to-account identity merge flow for managed federated auth.
 8. Finalize collaboration permissions model and session visibility defaults.
 
 ## Phase 1: Foundations
@@ -57,7 +61,8 @@
 4. Stand up AWS infrastructure (API Gateway, Lambda, DynamoDB).
 5. Implement event ingestion and hybrid projection APIs with idempotency.
 6. Define and test gossip replication protocol with UUID dedupe rules.
-7. Implement identity model (anonymous + authenticated) and merge APIs.
+7. Implement identity model (anonymous + managed federated account) and merge
+   APIs.
 8. Implement match membership roles (`RW`/`RO`) and authorization checks.
 9. Implement join flows (public `RO` join + code/link + optional location-assisted discovery backend support).
 10. Implement polling sync endpoints and client poll loop contracts.
@@ -72,8 +77,9 @@
 7. Add offline queueing/retry and convergence diagnostics.
 8. Add KNHB browse/select flow with cached backend integration.
 9. Add user join UX and permission management UX (RO default, RW promotion).
-10. Add optional sign-in UX with post-sign-in merge flow.
-11. End-to-end test in poor connectivity scenarios.
+10. Add managed federated sign-in UX with post-sign-in merge flow.
+11. Add iPhone-to-watch authenticated sync-state handoff and sign-out revocation.
+12. End-to-end test in poor connectivity scenarios.
 
 ## Phase 3: Android
 Status: On hold until Apple apps are satisfactory.
