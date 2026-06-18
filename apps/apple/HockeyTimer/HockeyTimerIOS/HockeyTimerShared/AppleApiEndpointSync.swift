@@ -58,6 +58,10 @@ final class AppleApiEndpointSync: NSObject, WCSessionDelegate {
         return "Bearer \(token)"
     }
 
+    func currentAuthStatusLabel() -> String {
+        currentAuthorizationHeader() == nil ? "Signed out" : "Signed in"
+    }
+
     func publishCurrentEndpoint() {
         publishCurrentContext()
     }

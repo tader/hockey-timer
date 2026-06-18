@@ -8,6 +8,8 @@ struct MatchDetailView: View {
     private let persistsMetadata: Bool
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     @State private var apiBaseDraft = ""
+    @State private var authStatusLabel = AppleApiEndpointSync.shared.currentAuthStatusLabel()
+    @State private var authMessage = "Sign in on iPhone to sync through the hosted API and paired watch."
     @State private var isEditingMetadata = false
 
     init(
@@ -56,10 +58,31 @@ struct MatchDetailView: View {
             }
 
             Text("Role: RO (default join)")
-            Text("Sign-in optional")
             Text("Polling sync: every few seconds")
             Button("Edit Match Metadata") {
                 isEditingMetadata = true
+            }
+            Text("Account")
+                .font(.headline)
+            Text(authStatusLabel)
+                .font(.subheadline)
+            Text(authMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Sign in with Apple") {
+                    handleSignIn(provider: "Apple")
+                }
+                Button("Sign in with Google") {
+                    handleSignIn(provider: "Google")
+                }
+                Button("Sign in with GitHub") {
+                    handleSignIn(provider: "GitHub")
+                }
+            }
+            Button("Sign Out") {
+                AppleApiEndpointSync.shared.clearAuthState()
+                refreshAuthStatus(message: "Signed out. Local match operation still works.")
             }
             Text("API Base")
                 .font(.headline)
@@ -101,11 +124,23 @@ struct MatchDetailView: View {
         }
         .onAppear {
             apiBaseDraft = model.currentApiBase
+            refreshAuthStatus(message: authMessage)
             model.refreshProjection()
         }
         .onReceive(poller) { _ in
             model.refreshProjection()
         }
+    }
+
+    private func handleSignIn(provider: String) {
+        refreshAuthStatus(
+            message: "\(provider) sign-in needs managed provider configuration. Local match operation still works."
+        )
+    }
+
+    private func refreshAuthStatus(message: String) {
+        authStatusLabel = AppleApiEndpointSync.shared.currentAuthStatusLabel()
+        authMessage = message
     }
 }
 

@@ -50,6 +50,9 @@
     bearer tokens, web app has OIDC PKCE sign-in and attaches tokens to API
     calls, and Apple sync attaches/mirrors auth state to watch while preserving
     local-only operation.
+26. iPhone account controls added: visible Apple, Google, and GitHub sign-in
+    entry points plus sign-out/status controls. Provider-specific native sign-in
+    wiring remains behind managed auth configuration.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
