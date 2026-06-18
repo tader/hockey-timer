@@ -53,6 +53,8 @@
 26. iPhone account controls added: visible Apple, Google, and GitHub sign-in
     entry points plus sign-out/status controls. Provider-specific native sign-in
     wiring remains behind managed auth configuration.
+27. Web account controls added: explicit Apple, Google, and GitHub sign-in
+    buttons route through configured OIDC PKCE login.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

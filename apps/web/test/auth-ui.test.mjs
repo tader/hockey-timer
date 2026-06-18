@@ -28,6 +28,11 @@ test("web app uses PKCE sign-in and bearer auth for API calls", () => {
     "Sign in required for web API access.",
     "authorization",
     "renderAuthPanel",
+    "Sign in with Apple",
+    "Sign in with Google",
+    "Sign in with GitHub",
+    "data-provider",
+    "identity_provider",
   ]) {
     assert.ok(source.includes(marker), `source missing ${marker}`);
   }
