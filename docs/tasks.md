@@ -43,6 +43,9 @@
     without API configuration or sign-in; hosted API and web app usage require
     managed federated sign-in; iPhone owns Apple Watch sign-in and mirrors
     authenticated sync state to the paired watch.
+24. Planned Time tab cleanup: remove actions duplicated by Admin except the
+    start-period button, move pending sync state to Admin, and use freed space
+    for larger timer text and larger score buttons.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

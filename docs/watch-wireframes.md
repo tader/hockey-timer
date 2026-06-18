@@ -243,7 +243,13 @@ Behavior to carry forward:
 - Remaining time uses yellow while positive and red once overtime starts.
 - Period indicator uses current period and total period count.
 - Between periods, replace the live timer with a start-next-period action.
-- After final period, offer new match/reset flow.
+- Keep the Time tab clean: actions that are available from Admin do not appear
+  here, except the start-period button. Pause, match ending, new match, alternate
+  format selection, and sync diagnostics belong on Admin.
+- Show pending sync state on Admin, not Time, so the Time tab can prioritize
+  timer and score tap targets.
+- After final period, show ended state only; restart/new-match actions live on
+  Admin.
 
 ### Ended Match Quick Restart
 
