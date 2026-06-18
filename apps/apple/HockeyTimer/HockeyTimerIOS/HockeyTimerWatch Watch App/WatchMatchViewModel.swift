@@ -2,6 +2,9 @@ import Foundation
 
 final class WatchMatchViewModel: MatchSyncViewModel {
     init(isPreview: Bool = false, previewApiBase: String? = nil) {
+        if !isPreview {
+            AppleApiEndpointSync.shared.start()
+        }
         super.init(
             matchId: "demo-match",
             originPlatform: "watchos",

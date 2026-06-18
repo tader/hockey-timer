@@ -73,6 +73,7 @@ struct MatchDetailView: View {
             HStack {
                 Button("Save API Base") {
                     model.updateApiBase(apiBaseDraft)
+                    AppleApiEndpointSync.shared.updateEndpoint(apiBaseDraft)
                     model.refreshProjection()
                 }
                 Button("Reload") {

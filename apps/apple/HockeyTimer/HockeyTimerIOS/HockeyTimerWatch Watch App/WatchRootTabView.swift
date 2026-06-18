@@ -27,12 +27,12 @@ struct WatchRootTabView: View {
     var body: some View {
         NavigationStack {
             TabView(selection: $selectedTab) {
+                AdminTabView()
+                    .tag(WatchTab.admin)
                 TimeTabView()
                     .tag(WatchTab.timer)
                 ScoreTabView()
                     .tag(WatchTab.score)
-                AdminTabView()
-                    .tag(WatchTab.admin)
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .navigationTitle(selectedTab.title)

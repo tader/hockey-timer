@@ -7,6 +7,9 @@ struct HockeyTimerIOSApp: App {
             NavigationStack {
                 MatchListView()
             }
+            .onAppear {
+                AppleApiEndpointSync.shared.start()
+            }
         }
     }
 }

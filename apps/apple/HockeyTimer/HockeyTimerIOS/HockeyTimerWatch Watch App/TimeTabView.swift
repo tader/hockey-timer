@@ -7,30 +7,12 @@ struct TimeTabView: View {
     var body: some View {
         VStack(spacing: 6) {
             HStack {
-                Button(action: model.incrementHome) {
-                    Text("\(model.homeScore)")
-                        .font(.title2)
-                        .frame(minWidth: 44)
-                }
-                .glassEffect()
-                .tint(.red)
-                .foregroundColor(.white)
-                .buttonBorderShape(.roundedRectangle(radius: 10))
-                .disabled(model.isEnded)
+                scoreButton(score: model.homeScore, tint: .red, action: model.incrementHome)
 
                 Text("-")
                     .font(.title3.weight(.black))
 
-                Button(action: model.incrementAway) {
-                    Text("\(model.awayScore)")
-                        .font(.title2)
-                        .frame(minWidth: 44)
-                }
-                .glassEffect()
-                .tint(.blue)
-                .foregroundColor(.white)
-                .buttonBorderShape(.roundedRectangle(radius: 10))
-                .disabled(model.isEnded)
+                scoreButton(score: model.awayScore, tint: .blue, action: model.incrementAway)
             }
 
             Spacer(minLength: 4)
@@ -115,6 +97,21 @@ struct TimeTabView: View {
 
     private func createDefaultMatch() {
         model.createQuickMatch()
+    }
+
+    private func scoreButton(score: Int, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("\(score)")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.75)
+                .lineLimit(1)
+                .frame(width: 58, height: 44)
+                .foregroundStyle(.white)
+                .background(tint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isEnded)
     }
 }
 
