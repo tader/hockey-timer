@@ -52,6 +52,12 @@ struct AdminTabView: View {
                 Text("\(model.periodProgressLabel) \(model.stateLabel)")
                     .font(.caption2)
                     .foregroundColor(.gray)
+
+                if model.pendingEventCount > 0 {
+                    Text("\(model.pendingEventCount) pending")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
             }
         }
         .buttonStyle(.bordered)
@@ -101,7 +107,8 @@ struct AdminTabView: View {
                 homeScore: 2,
                 awayScore: 1,
                 currentPeriod: 3,
-                currentPeriodPlayedSeconds: 4 * 60
+                currentPeriodPlayedSeconds: 4 * 60,
+                pendingEventCount: 3
             )
         )
 }

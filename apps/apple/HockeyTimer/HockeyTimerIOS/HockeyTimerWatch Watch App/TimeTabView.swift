@@ -2,10 +2,9 @@ import SwiftUI
 
 struct TimeTabView: View {
     @EnvironmentObject private var model: WatchMatchViewModel
-    @State private var showFormatPicker = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             HStack {
                 scoreButton(score: model.homeScore, tint: .red, action: model.incrementHome)
 
@@ -15,14 +14,14 @@ struct TimeTabView: View {
                 scoreButton(score: model.awayScore, tint: .blue, action: model.incrementAway)
             }
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
 
             if model.isRunning {
                 TimelineView(.periodic(from: .now, by: 0.25)) { timeline in
                     Text(model.watchTimeText(on: timeline.date))
-                        .font(.system(size: 64, weight: .medium, design: .rounded))
+                        .font(.system(size: 76, weight: .medium, design: .rounded))
                         .monospacedDigit()
-                        .minimumScaleFactor(0.45)
+                        .minimumScaleFactor(0.35)
                         .lineLimit(1)
                         .foregroundColor(model.watchTimeIsOvertime(on: timeline.date) ? .red : .yellow)
                 }
@@ -30,34 +29,10 @@ struct TimeTabView: View {
                 Text(model.periodProgressLabel)
                     .font(.footnote)
                     .foregroundColor(.gray)
-
-                Button(action: model.pause) {
-                    Image(systemName: "pause.fill")
-                }
-                .glassEffect()
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
             } else if model.isEnded {
                 Text("ENDED")
-                    .font(.headline)
+                    .font(.system(size: 42, weight: .semibold, design: .rounded))
                     .foregroundColor(.gray)
-
-                Button(action: createDefaultMatch) {
-                    VStack(spacing: 2) {
-                        Text(WatchPresentation.primaryNewMatchFormatLabel)
-                            .font(.title3.weight(.semibold))
-                        Text("New Match")
-                            .font(.caption2)
-                    }
-                }
-                .glassEffect()
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-
-                Button("Other Format") {
-                    showFormatPicker = true
-                }
-                .buttonStyle(.bordered)
             } else {
                 Button(action: startPeriod) {
                     Text(model.nextPeriodTitle)
@@ -71,20 +46,8 @@ struct TimeTabView: View {
                     .font(.footnote)
                     .foregroundColor(.gray)
             }
-
-            Spacer(minLength: 4)
-
-            if model.pendingEventCount > 0 {
-                Text("\(model.pendingEventCount) pending")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
-            }
         }
         .padding(.horizontal, 8)
-        .sheet(isPresented: $showFormatPicker) {
-            NewMatchFormatPickerView()
-                .environmentObject(model)
-        }
     }
 
     private func startPeriod() {
@@ -95,18 +58,14 @@ struct TimeTabView: View {
         }
     }
 
-    private func createDefaultMatch() {
-        model.createQuickMatch()
-    }
-
     private func scoreButton(score: Int, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text("\(score)")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .font(.system(size: 44, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.65)
                 .lineLimit(1)
-                .frame(width: 58, height: 44)
+                .frame(width: 68, height: 52)
                 .foregroundStyle(.white)
                 .background(tint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
