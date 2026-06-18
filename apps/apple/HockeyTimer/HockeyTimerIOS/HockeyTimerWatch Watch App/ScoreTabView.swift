@@ -65,3 +65,15 @@ struct ScoreTabView: View {
         }
     }
 }
+
+#Preview("ScoreTabView - Corrections") {
+    ScoreTabView()
+        .environmentObject(
+            WatchMatchViewModel.preview(
+                homeScore: 2,
+                awayScore: 1,
+                currentPeriod: 2,
+                currentPeriodPlayedSeconds: 9 * 60
+            )
+        )
+}

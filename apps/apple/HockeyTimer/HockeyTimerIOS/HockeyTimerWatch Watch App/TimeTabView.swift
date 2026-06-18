@@ -144,3 +144,30 @@ struct NewMatchFormatPickerView: View {
         .padding(8)
     }
 }
+
+#Preview("TimeTabView - Running") {
+    TimeTabView()
+        .environmentObject(
+            WatchMatchViewModel.preview(
+                homeScore: 2,
+                awayScore: 1,
+                isRunning: true,
+                currentPeriod: 2,
+                currentPeriodPlayedSeconds: 9 * 60,
+                pendingEventCount: 2
+            )
+        )
+}
+
+#Preview("NewMatchFormatPickerView - Formats") {
+    NewMatchFormatPickerView()
+        .environmentObject(
+            WatchMatchViewModel.preview(
+                homeScore: 2,
+                awayScore: 2,
+                isEnded: true,
+                currentPeriod: 4,
+                currentPeriodPlayedSeconds: 17 * 60 + 30
+            )
+        )
+}

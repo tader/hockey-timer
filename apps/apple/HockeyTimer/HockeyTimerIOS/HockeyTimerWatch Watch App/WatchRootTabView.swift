@@ -16,9 +16,13 @@ enum WatchTab {
 }
 
 struct WatchRootTabView: View {
-    @StateObject private var model = WatchMatchViewModel()
+    @StateObject private var model: WatchMatchViewModel
     @State private var selectedTab = WatchTab.timer
     private let poller = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
+    init(model: WatchMatchViewModel = WatchMatchViewModel()) {
+        _model = StateObject(wrappedValue: model)
+    }
 
     var body: some View {
         NavigationStack {
@@ -41,4 +45,17 @@ struct WatchRootTabView: View {
             model.refreshProjection()
         }
     }
+}
+
+#Preview("WatchRootTabView - Running") {
+    WatchRootTabView(
+        model: WatchMatchViewModel.preview(
+            homeScore: 2,
+            awayScore: 1,
+            isRunning: true,
+            currentPeriod: 2,
+            currentPeriodPlayedSeconds: 9 * 60,
+            pendingEventCount: 2
+        )
+    )
 }

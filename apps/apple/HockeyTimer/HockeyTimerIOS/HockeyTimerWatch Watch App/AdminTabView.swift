@@ -93,3 +93,15 @@ struct AdminTabView: View {
         }
     }
 }
+
+#Preview("AdminTabView - Paused") {
+    AdminTabView()
+        .environmentObject(
+            WatchMatchViewModel.preview(
+                homeScore: 2,
+                awayScore: 1,
+                currentPeriod: 3,
+                currentPeriodPlayedSeconds: 4 * 60
+            )
+        )
+}
