@@ -32,6 +32,9 @@
 20. Web runtime API config load order fixed: Vite moved module scripts ahead of
     body scripts, so `/config.js` must be in the document head before the app
     bundle.
+21. Apple SwiftUI static previews added for all nine iOS/watchOS views. Preview
+    fixtures use deterministic mock data, and preview models suppress network,
+    polling side effects, event persistence, and store reads/writes.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.
