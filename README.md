@@ -64,6 +64,7 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
   - `apps/apple/HockeyTimer/HockeyTimerIOS/HockeyTimerShared/MatchSyncViewModel.swift`
 - Apple runtime improvements implemented:
   - Configurable API base setting (iOS + watch).
+  - API endpoint sync and auth-state mirroring from iPhone to watch.
   - Durable offline event queue with retry on reconnect.
   - iOS KNHB import flow (club -> team -> upcoming match).
   - iOS custom match creation + metadata editing.
@@ -96,6 +97,13 @@ watch action -> event ingestion API -> projection poll -> watch/iOS/web refresh.
 - Web API URL:
   - Set `WEB_API_BASE` before starting Compose.
   - Default: `http://localhost:8787`
+- API auth:
+  - Set `AUTH_MODE=required` for hosted API auth enforcement.
+  - Set `AUTH_JWKS_URL`, `AUTH_ISSUER`, and `AUTH_AUDIENCE` for managed OIDC
+    JWT validation.
+- Web auth:
+  - Configure OIDC Authorization Code + PKCE endpoints/client id through
+    `apps/web/public/config.js` or hosted runtime config.
 - API state:
   - Production Compose stores events in PostgreSQL volume `api-db-data`.
   - SQLite development storage defaults to `data/hockey-timer.sqlite`.

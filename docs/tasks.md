@@ -46,6 +46,10 @@
 24. Time tab cleanup completed: actions duplicated by Admin were removed except
     the start-period button, pending sync state moved to Admin, and freed space
     is used for larger timer text and larger score buttons.
+25. Managed federated auth foundation implemented: backend/API can require
+    bearer tokens, web app has OIDC PKCE sign-in and attaches tokens to API
+    calls, and Apple sync attaches/mirrors auth state to watch while preserving
+    local-only operation.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

@@ -1,10 +1,12 @@
 import { replayMatch } from "@hockey-timer/replay-engine";
 import { type MatchEvent, sortEvents, validateEvent } from "@hockey-timer/event-schema";
+import { authorize } from "./auth.ts";
 import { getEvents, upsertEvents } from "./store.ts";
 
 type ApiEvent = {
   pathParameters?: { id?: string };
   body?: string;
+  headers?: Record<string, string | undefined>;
   queryStringParameters?: { since?: string };
 };
 
@@ -21,6 +23,9 @@ function json(statusCode: number, payload: object): ApiResult {
 }
 
 export async function batchUpsertHandler(event: ApiEvent): Promise<ApiResult> {
+  const auth = await authorize(event);
+  if (!auth.ok) return json(auth.statusCode, { error: auth.error });
+
   const matchId = event.pathParameters?.id;
   if (!matchId) {
     return json(400, { error: "match id required" });
@@ -45,6 +50,9 @@ export async function batchUpsertHandler(event: ApiEvent): Promise<ApiResult> {
 }
 
 export async function listEventsHandler(event: ApiEvent): Promise<ApiResult> {
+  const auth = await authorize(event);
+  if (!auth.ok) return json(auth.statusCode, { error: auth.error });
+
   const matchId = event.pathParameters?.id;
   if (!matchId) {
     return json(400, { error: "match id required" });
@@ -62,6 +70,9 @@ export async function listEventsHandler(event: ApiEvent): Promise<ApiResult> {
 }
 
 export async function projectionHandler(event: ApiEvent): Promise<ApiResult> {
+  const auth = await authorize(event);
+  if (!auth.ok) return json(auth.statusCode, { error: auth.error });
+
   const matchId = event.pathParameters?.id;
   if (!matchId) {
     return json(400, { error: "match id required" });

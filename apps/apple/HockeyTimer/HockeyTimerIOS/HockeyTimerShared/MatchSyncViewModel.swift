@@ -465,6 +465,9 @@ class MatchSyncViewModel: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "content-type")
+        if let authorization = AppleApiEndpointSync.shared.currentAuthorizationHeader() {
+            request.addValue(authorization, forHTTPHeaderField: "authorization")
+        }
         request.httpBody = try JSONEncoder().encode(body)
 
         let (_, response) = try await URLSession.shared.data(for: request)
@@ -481,7 +484,11 @@ class MatchSyncViewModel: ObservableObject {
             throw NSError(domain: "MatchSyncViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid projection URL"])
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        if let authorization = AppleApiEndpointSync.shared.currentAuthorizationHeader() {
+            request.addValue(authorization, forHTTPHeaderField: "authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw NSError(domain: "MatchSyncViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "Projection fetch failed"])
         }

@@ -7,6 +7,89 @@ const PORT = Number(process.env.PORT || 8787);
 const KNHB_BASE = "https://publicaties.hockeyweerelt.nl/mc";
 
 let eventStore;
+let cachedJwks;
+
+function base64UrlDecode(value) {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return Uint8Array.from(Buffer.from(padded, "base64"));
+}
+
+function decodeJwtPart(value) {
+  return JSON.parse(Buffer.from(base64UrlDecode(value)).toString("utf8"));
+}
+
+function audienceMatches(actual, expected) {
+  if (!expected) return true;
+  if (Array.isArray(actual)) return actual.includes(expected);
+  return actual === expected;
+}
+
+async function getJwks() {
+  if (cachedJwks) return cachedJwks;
+  if (!process.env.AUTH_JWKS_URL) {
+    throw new Error("AUTH_JWKS_URL is required when AUTH_MODE=required");
+  }
+  const response = await fetch(process.env.AUTH_JWKS_URL);
+  if (!response.ok) {
+    throw new Error(`JWKS fetch failed: ${response.status}`);
+  }
+  cachedJwks = await response.json();
+  return cachedJwks;
+}
+
+async function verifyJwt(token) {
+  const [headerPart, payloadPart, signaturePart] = token.split(".");
+  if (!headerPart || !payloadPart || !signaturePart) throw new Error("malformed bearer token");
+
+  const header = decodeJwtPart(headerPart);
+  const payload = decodeJwtPart(payloadPart);
+  if (header.alg !== "RS256") throw new Error("unsupported token algorithm");
+
+  const jwks = await getJwks();
+  const key = jwks.keys?.find((candidate) => candidate.kid === header.kid);
+  if (!key?.n || !key?.e) throw new Error("matching JWKS key not found");
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "jwk",
+    key,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const signed = new TextEncoder().encode(`${headerPart}.${payloadPart}`);
+  const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, base64UrlDecode(signaturePart), signed);
+  if (!valid) throw new Error("invalid token signature");
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!payload.sub) throw new Error("token subject required");
+  if (payload.exp && payload.exp <= nowSeconds) throw new Error("token expired");
+  if (process.env.AUTH_ISSUER && payload.iss !== process.env.AUTH_ISSUER) throw new Error("token issuer mismatch");
+  if (!audienceMatches(payload.aud, process.env.AUTH_AUDIENCE)) throw new Error("token audience mismatch");
+}
+
+async function authorizeRequest(req) {
+  if (process.env.AUTH_MODE !== "required") {
+    return { ok: true };
+  }
+
+  const header = req.headers.authorization || "";
+  const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token) {
+    return { ok: false, error: "authentication required" };
+  }
+
+  if (process.env.AUTH_DEV_BEARER_TOKEN && token === process.env.AUTH_DEV_BEARER_TOKEN) {
+    return { ok: true };
+  }
+
+  try {
+    await verifyJwt(token);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -251,7 +334,7 @@ function sendJson(res, statusCode, payload) {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-headers": "authorization,content-type",
   });
   res.end(JSON.stringify(payload));
 }
@@ -269,7 +352,7 @@ async function proxyKnhbJson(res, path) {
       "content-type": contentType,
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": "authorization,content-type",
     });
     res.end(text);
   } catch (error) {
@@ -291,7 +374,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": "authorization,content-type",
     });
     res.end();
     return;
@@ -305,6 +388,22 @@ const server = http.createServer(async (req, res) => {
   const knhbTeamsMatch = url.pathname.match(/^\/knhb\/clubs\/([^/]+)\/teams$/);
   const knhbUpcomingMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/upcoming$/);
   const knhbOfficialMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/official$/);
+  const isApiRoute =
+    upsertMatch ||
+    eventsMatch ||
+    projectionMatch ||
+    knhbClubsMatch ||
+    knhbTeamsMatch ||
+    knhbUpcomingMatch ||
+    knhbOfficialMatch;
+
+  if (isApiRoute) {
+    const auth = await authorizeRequest(req);
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+  }
 
   if (req.method === "POST" && upsertMatch) {
     const matchId = decodeURIComponent(upsertMatch[1]);

@@ -45,6 +45,12 @@
   - `shared/replay-engine`: replay/projection behavior tests
   - `backend/services/events`: handler validation/dedup/list/projection tests
   - `apps/web`: KNHB parsing + metadata mapping tests
+- Managed federated auth foundation implemented:
+  - backend handlers and local server can require bearer tokens
+  - OIDC/JWKS validation is configured by environment
+  - web app uses OIDC Authorization Code + PKCE sign-in and sends bearer tokens
+  - Apple match sync attaches stored bearer auth and mirrors auth state from
+    iPhone to watch through Watch Connectivity
 - KNHB parsing hardened in web import flow:
   - dedicated parser module with guards against timestamp-like team fields
   - away-team timestamp regression covered by unit tests

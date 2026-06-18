@@ -4,13 +4,42 @@ import {
   toImportedMatchMetadata,
 } from "./knhb-parsing.js";
 
-const API_BASE = (globalThis as { __API_BASE__?: string }).__API_BASE__ ?? "http://localhost:8787";
+type RuntimeConfig = {
+  __API_BASE__?: string;
+  __AUTH_AUTHORIZATION_ENDPOINT__?: string;
+  __AUTH_AUDIENCE__?: string;
+  __AUTH_CLIENT_ID__?: string;
+  __AUTH_ISSUER__?: string;
+  __AUTH_REDIRECT_URI__?: string;
+  __AUTH_SCOPE__?: string;
+  __AUTH_TOKEN_ENDPOINT__?: string;
+};
+
+const runtimeConfig = globalThis as RuntimeConfig;
+const API_BASE = runtimeConfig.__API_BASE__ ?? "http://localhost:8787";
+const AUTH_AUTHORIZATION_ENDPOINT = runtimeConfig.__AUTH_AUTHORIZATION_ENDPOINT__ ?? "";
+const AUTH_AUDIENCE = runtimeConfig.__AUTH_AUDIENCE__ ?? "";
+const AUTH_CLIENT_ID = runtimeConfig.__AUTH_CLIENT_ID__ ?? "";
+const AUTH_ISSUER = runtimeConfig.__AUTH_ISSUER__ ?? "";
+const AUTH_REDIRECT_URI = runtimeConfig.__AUTH_REDIRECT_URI__ ?? globalThis.location.origin;
+const AUTH_SCOPE = runtimeConfig.__AUTH_SCOPE__ ?? "openid profile email";
+const AUTH_TOKEN_ENDPOINT = runtimeConfig.__AUTH_TOKEN_ENDPOINT__ ?? "";
 const KNHB_BASE = `${API_BASE}/knhb`;
 const matchesKey = "hockey_timer_web_matches";
 const selectedMatchIdKey = "hockey_timer_web_selected_match";
 const deviceIdKey = "hockey_timer_web_device_id";
 const sequenceKey = "hockey_timer_web_sequence";
 const favoriteTeamsKey = "hockey_timer_web_favorite_teams";
+const authStateKey = "hockey_timer_web_auth_state";
+const authPkceVerifierKey = "hockey_timer_web_pkce_verifier";
+const authStateNonceKey = "hockey_timer_web_auth_nonce";
+
+type AuthState = {
+  accessToken: string;
+  expiresAt: number;
+  idToken?: string;
+  tokenType: string;
+};
 
 type MatchEvent = {
   eventId: string;
@@ -99,6 +128,7 @@ type UIState = {
   showEventStream: boolean;
   scoreboardMode: boolean;
   showShortcutsModal: boolean;
+  auth: AuthState | null;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -106,6 +136,158 @@ if (!root) {
   throw new Error("missing #app");
 }
 const appRoot: HTMLDivElement = root;
+
+function authConfigured(): boolean {
+  return !!AUTH_AUTHORIZATION_ENDPOINT && !!AUTH_CLIENT_ID && !!AUTH_TOKEN_ENDPOINT;
+}
+
+function loadAuthState(): AuthState | null {
+  const raw = localStorage.getItem(authStateKey);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as AuthState;
+    if (!parsed.accessToken || parsed.expiresAt <= Date.now()) {
+      localStorage.removeItem(authStateKey);
+      return null;
+    }
+    return parsed;
+  } catch {
+    localStorage.removeItem(authStateKey);
+    return null;
+  }
+}
+
+function saveAuthState(auth: AuthState): void {
+  localStorage.setItem(authStateKey, JSON.stringify(auth));
+  uiState.auth = auth;
+}
+
+function clearAuthState(): void {
+  localStorage.removeItem(authStateKey);
+  localStorage.removeItem(authPkceVerifierKey);
+  localStorage.removeItem(authStateNonceKey);
+  uiState.auth = null;
+}
+
+function base64UrlEncode(bytes: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+async function sha256(value: string): Promise<ArrayBuffer> {
+  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+}
+
+function randomBase64Url(byteCount: number): string {
+  const bytes = new Uint8Array(byteCount);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes.buffer);
+}
+
+async function beginSignIn(): Promise<void> {
+  if (!authConfigured()) {
+    uiState.output = "Authentication is not configured.";
+    render();
+    return;
+  }
+
+  const verifier = randomBase64Url(32);
+  const challenge = base64UrlEncode(await sha256(verifier));
+  const state = randomBase64Url(16);
+  localStorage.setItem(authPkceVerifierKey, verifier);
+  localStorage.setItem(authStateNonceKey, state);
+
+  const url = new URL(AUTH_AUTHORIZATION_ENDPOINT);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", AUTH_CLIENT_ID);
+  url.searchParams.set("redirect_uri", AUTH_REDIRECT_URI);
+  url.searchParams.set("scope", AUTH_SCOPE);
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  if (AUTH_AUDIENCE) {
+    url.searchParams.set("audience", AUTH_AUDIENCE);
+  }
+  window.location.assign(url.toString());
+}
+
+async function completeAuthRedirect(): Promise<void> {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code) return;
+
+  const expectedState = localStorage.getItem(authStateNonceKey);
+  const verifier = localStorage.getItem(authPkceVerifierKey);
+  localStorage.removeItem(authStateNonceKey);
+  localStorage.removeItem(authPkceVerifierKey);
+
+  if (!state || state !== expectedState || !verifier) {
+    uiState.output = "Sign-in callback rejected.";
+    return;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: AUTH_CLIENT_ID,
+    code,
+    code_verifier: verifier,
+    redirect_uri: AUTH_REDIRECT_URI,
+  });
+  const response = await fetch(AUTH_TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!response.ok) {
+    uiState.output = `Sign-in failed: ${response.status}`;
+    return;
+  }
+
+  const token = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    id_token?: string;
+    token_type?: string;
+  };
+  if (!token.access_token) {
+    uiState.output = "Sign-in failed: token missing.";
+    return;
+  }
+  saveAuthState({
+    accessToken: token.access_token,
+    expiresAt: Date.now() + Number(token.expires_in ?? 3600) * 1000,
+    idToken: token.id_token,
+    tokenType: token.token_type ?? "Bearer",
+  });
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  window.history.replaceState({}, document.title, url.toString());
+  uiState.output = "Signed in.";
+}
+
+function authHeaders(): Record<string, string> {
+  if (!authConfigured()) {
+    throw new Error("Authentication is not configured for web API access.");
+  }
+  uiState.auth = loadAuthState();
+  if (!uiState.auth) {
+    throw new Error("Sign in required for web API access.");
+  }
+  return { authorization: `${uiState.auth.tokenType} ${uiState.auth.accessToken}` };
+}
+
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init.headers ?? {}),
+    },
+  });
+}
 
 const uiState: UIState = {
   matches: loadMatches(),
@@ -141,6 +323,7 @@ const uiState: UIState = {
   showEventStream: true,
   scoreboardMode: false,
   showShortcutsModal: false,
+  auth: loadAuthState(),
 };
 
 if (uiState.matches.length === 0) {
@@ -469,7 +652,7 @@ async function pushEvent(matchId: string, eventType: string, payload: object): P
     version: 1,
   };
 
-  const response = await fetch(`${API_BASE}/matches/${matchId}/events:batchUpsert`, {
+  const response = await authFetch(`${API_BASE}/matches/${matchId}/events:batchUpsert`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ events: [event] }),
@@ -482,7 +665,7 @@ async function pushEvent(matchId: string, eventType: string, payload: object): P
 }
 
 async function fetchEvents(matchId: string): Promise<MatchEvent[]> {
-  const response = await fetch(`${API_BASE}/matches/${matchId}/events`);
+  const response = await authFetch(`${API_BASE}/matches/${matchId}/events`);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`events fetch failed: ${response.status} ${text}`);
@@ -492,7 +675,7 @@ async function fetchEvents(matchId: string): Promise<MatchEvent[]> {
 }
 
 async function fetchProjectionSummary(matchId: string): Promise<MatchScore> {
-  const response = await fetch(`${API_BASE}/matches/${matchId}/projection`);
+  const response = await authFetch(`${API_BASE}/matches/${matchId}/projection`);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`projection fetch failed: ${response.status} ${text}`);
@@ -772,7 +955,7 @@ function jsonObjects(value: unknown): Record<string, unknown>[] {
 }
 
 async function fetchKNHBOptions(url: string, preferredNameKeys: string[]): Promise<KNHBOption[]> {
-  const response = await fetch(url);
+  const response = await authFetch(url);
   if (!response.ok) {
     throw new Error(`KNHB fetch failed: ${response.status}`);
   }
@@ -806,7 +989,7 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
   uiState.loading = true;
   render();
   try {
-    const response = await fetch(`${KNHB_BASE}/clubs/${encodeURIComponent(clubId)}/teams`);
+    const response = await authFetch(`${KNHB_BASE}/clubs/${encodeURIComponent(clubId)}/teams`);
     if (!response.ok) {
       throw new Error(`KNHB teams fetch failed: ${response.status}`);
     }
@@ -834,7 +1017,7 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
 }
 
 async function fetchKNHBMatchesForTeam(teamId: string, kind: "upcoming" | "official" = "upcoming"): Promise<KNHBMatch[]> {
-  const response = await fetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/${kind}`);
+  const response = await authFetch(`${KNHB_BASE}/teams/${encodeURIComponent(teamId)}/matches/${kind}`);
   if (!response.ok) {
     throw new Error(`KNHB ${kind} matches fetch failed: ${response.status}`);
   }
@@ -886,7 +1069,7 @@ async function loadKNHBMatchesForFavorite(favorite: FavoriteTeam): Promise<void>
   try {
     let relatedTeamIds = favorite.teamIds;
     if (favorite.clubId) {
-      const response = await fetch(`${KNHB_BASE}/clubs/${encodeURIComponent(favorite.clubId)}/teams`);
+      const response = await authFetch(`${KNHB_BASE}/clubs/${encodeURIComponent(favorite.clubId)}/teams`);
       if (response.ok) {
         const payload = (await response.json()) as unknown;
         const resolvedIds = jsonObjects(payload)
@@ -1249,6 +1432,28 @@ function renderListView(): string {
   `;
 }
 
+function renderAuthPanel(): string {
+  const configured = authConfigured();
+  const signedIn = !!loadAuthState();
+  const providerLabel = AUTH_ISSUER ? ` via ${escapeHtml(AUTH_ISSUER)}` : "";
+  const status = !configured
+    ? "Auth not configured. Web API sync disabled."
+    : signedIn
+      ? `Signed in${providerLabel}`
+      : "Sign in required for web/API sync.";
+
+  return `
+    <section class="auth-panel">
+      <span>${status}</span>
+      ${
+        signedIn
+          ? `<button id="signOut" class="ghost">Sign Out</button>`
+          : `<button id="signIn" ${configured ? "" : "disabled"}>Sign In</button>`
+      }
+    </section>
+  `;
+}
+
 function renderCreateView(): string {
   const targetLabel = uiState.importTarget === "update" ? "Assign KNHB To Current Match" : "Import KNHB Match";
   const importAction = uiState.importTarget === "update" ? "Assign To Match" : "Create Match";
@@ -1492,6 +1697,7 @@ function render(): void {
   appRoot.innerHTML = `
     <div class="app-shell">
       <h1>Hockey Timer</h1>
+      ${renderAuthPanel()}
       ${body}
     </div>
   `;
@@ -1709,6 +1915,16 @@ function initKeyboardShortcuts(): void {
 }
 
 function wireHandlers(): void {
+  appRoot.querySelector<HTMLButtonElement>("#signIn")?.addEventListener("click", () => {
+    void beginSignIn();
+  });
+
+  appRoot.querySelector<HTMLButtonElement>("#signOut")?.addEventListener("click", () => {
+    clearAuthState();
+    uiState.output = "Signed out.";
+    render();
+  });
+
   appRoot.querySelectorAll<HTMLElement>(".js-open-match").forEach((element) => {
     element.addEventListener("click", () => {
       const id = element.dataset.matchId;
@@ -2063,7 +2279,9 @@ function wireHandlers(): void {
   });
 }
 
-render();
+void completeAuthRedirect().finally(() => {
+  render();
+});
 initKeyboardShortcuts();
 void refreshProjection();
 setInterval(() => {

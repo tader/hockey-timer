@@ -1,6 +1,8 @@
 # Web App (Current MVP Reference)
 
 Scope:
+- Managed federated sign-in for web/API access using OIDC Authorization Code
+  with PKCE.
 - Match list with sortable columns and filters:
   - team/home/away
   - location club
@@ -40,3 +42,15 @@ npm run -w @hockey-timer/web serve
 Defaults:
 - Web: `http://localhost:4173`
 - Backend API expected at: `http://localhost:8787`
+
+Auth runtime config:
+- `__AUTH_AUTHORIZATION_ENDPOINT__`
+- `__AUTH_TOKEN_ENDPOINT__`
+- `__AUTH_CLIENT_ID__`
+- `__AUTH_AUDIENCE__` (optional)
+- `__AUTH_SCOPE__` (default `openid profile email`)
+- `__AUTH_REDIRECT_URI__`
+
+These are set in `public/config.js` or replaced by hosted runtime config. If
+auth is not configured, web API sync is disabled rather than falling back to
+unauthenticated hosted access.
