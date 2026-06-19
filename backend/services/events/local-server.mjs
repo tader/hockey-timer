@@ -1,13 +1,15 @@
 import http from "node:http";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8787);
-const KNHB_BASE = process.env.KNHB_BASE_URL || "https://publicaties.hockeyweerelt.nl/mc";
+const KNHB_BASE = process.env.KNHB_BASE_URL || "https://app.hockeyweerelt.nl";
 
 let eventStore;
 let cachedJwks;
+let knhbDevice;
 
 function base64UrlDecode(value) {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
@@ -389,7 +391,15 @@ function sendJson(res, statusCode, payload) {
 async function proxyKnhbJson(res, path) {
   const target = `${KNHB_BASE}${path}`;
   try {
-    const response = await fetchWithRedirectGuard(target);
+    let response = await fetchWithRedirectGuard(target, {
+      headers: await knhbRequestHeaders(target),
+    });
+    if (response.status === 401) {
+      knhbDevice = undefined;
+      response = await fetchWithRedirectGuard(target, {
+        headers: await knhbRequestHeaders(target),
+      });
+    }
 
     const text = await response.text();
     const contentType = response.headers.get("content-type") || "application/json";
@@ -409,11 +419,63 @@ async function proxyKnhbJson(res, path) {
   }
 }
 
-async function fetchWithRedirectGuard(target) {
+async function knhbRequestHeaders(target) {
+  const device = await getKnhbDevice();
+  const url = new URL(target);
+  const path = url.pathname.replace(/[^a-zA-Z0-9\-/]+/g, "");
+  const query = Array.from(url.searchParams.entries())
+    .filter(([key]) => key.length > 0)
+    .map(([key, value]) => {
+      const cleanKey = key.replace(/[^a-zA-Z0-9\-/=]+/g, "");
+      const cleanValue = value.replace(/[^a-zA-Z0-9\-/=]+/g, "");
+      return `${cleanKey}=${cleanValue}`;
+    })
+    .join("");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const secret = device.uuid.split("").reverse().join("");
+  const signature = createHash("sha1").update(`${timestamp}${path}${query}${secret}`).digest("hex");
+  return {
+    accept: "application/json",
+    "content-type": "application/json",
+    "x-requested-with": "XMLHttpRequest",
+    "x-hapi-authorization": device.token,
+    "x-hapi-timestamp": timestamp,
+    "x-hapi-signature": signature,
+    "x-hapi-version": "7",
+  };
+}
+
+async function getKnhbDevice() {
+  if (knhbDevice) return knhbDevice;
+
+  const uuid = process.env.KNHB_DEVICE_UUID || randomUUID();
+  const target = new URL("/device/register", KNHB_BASE).toString();
+  const response = await fetchWithRedirectGuard(target, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "x-requested-with": "XMLHttpRequest",
+    },
+    body: JSON.stringify({ uuid, os: "Web" }),
+  });
+  if (!response.ok) {
+    throw new Error(`knhb device registration failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (!payload.token) {
+    throw new Error("knhb device registration returned no token");
+  }
+  knhbDevice = { uuid, token: payload.token };
+  return knhbDevice;
+}
+
+async function fetchWithRedirectGuard(target, options = {}) {
   let current = target;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const response = await fetch(current, {
-      headers: { accept: "application/json" },
+      ...options,
       redirect: "manual",
     });
     const location = response.headers.get("location");

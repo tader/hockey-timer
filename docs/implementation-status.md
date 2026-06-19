@@ -67,6 +67,8 @@
   - away-team timestamp regression covered by unit tests
 - KNHB proxy now detects HockeyWeerelt self-redirect loops and returns a clear
   upstream error instead of a generic fetch failure.
+- KNHB public match-center upstream moved to `https://app.hockeyweerelt.nl` and
+  requires anonymous device registration plus `X-HAPI-*` signed request headers.
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.
@@ -77,6 +79,12 @@
 - Web match-view primary clock control could appear stale (for example showing `Start` while clock was running).
 - Root cause: `refreshProjection()` updated live clock/score via `syncLivePanel()`, but button label/class/action visibility were previously only computed during full `render()`.
 - Fix: sync logic now updates primary clock button (`Start`/`Pause`/`Resume`) and paused-only `End Match` visibility directly from the latest replayed state.
+- KNHB proxy returned 502 for club browse because the old
+  `publicaties.hockeyweerelt.nl/mc` API now self-redirects and the public
+  match-center uses `app.hockeyweerelt.nl` with anonymous device registration
+  plus signed HAPI headers.
+- Fix: backend KNHB proxy now registers a server-side anonymous device, signs
+  upstream requests with `X-HAPI-*` headers, and retries once on upstream 401.
 
 ## Next Priorities
 1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.

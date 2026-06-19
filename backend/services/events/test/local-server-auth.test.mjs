@@ -60,6 +60,56 @@ async function startRedirectLoopServer() {
   return { server, port };
 }
 
+async function startSignedKnhbServer() {
+  const requests = [];
+  const port = await freePort();
+  const server = http.createServer(async (req, res) => {
+    requests.push({
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+    });
+
+    if (req.method === "POST" && req.url === "/device/register") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (body.os !== "Web") {
+        res.writeHead(422, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid os" }));
+        return;
+      }
+
+      res.writeHead(201, { "content-type": "application/json" });
+      res.end(JSON.stringify({ token: "upstream-device-token" }));
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/clubs") {
+      if (
+        req.headers["x-hapi-authorization"] !== "upstream-device-token" ||
+        !req.headers["x-hapi-signature"] ||
+        !req.headers["x-hapi-timestamp"] ||
+        req.headers["x-hapi-version"] !== "7"
+      ) {
+        res.writeHead(401, { "content-type": "application/json" });
+        res.end(JSON.stringify({ message: "Unauthenticated" }));
+        return;
+      }
+
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ data: [{ federation_reference_id: "CLUB1", name: "Club One" }] }));
+      return;
+    }
+
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  server.listen(port, "127.0.0.1");
+  await once(server, "listening");
+  return { server, port, requests };
+}
+
 test("local server requires bearer token when auth mode is required", async () => {
   const { child, port } = await startServer();
   try {
@@ -116,6 +166,29 @@ test("local server requires bearer token when auth mode is required", async () =
     assert.equal(body.matches[0].homeTeam, "Remote Home");
   } finally {
     child.kill();
+  }
+});
+
+test("local server signs KNHB proxy requests with anonymous device headers", async () => {
+  const upstream = await startSignedKnhbServer();
+  const { child, port } = await startServer({
+    KNHB_BASE_URL: `http://127.0.0.1:${upstream.port}`,
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/knhb/clubs`, {
+      headers: { authorization: "Bearer local-test-token" },
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.data[0].name, "Club One");
+
+    assert.deepEqual(
+      upstream.requests.map((request) => `${request.method} ${request.url}`),
+      ["POST /device/register", "GET /clubs"],
+    );
+  } finally {
+    child.kill();
+    upstream.server.close();
   }
 });
 
