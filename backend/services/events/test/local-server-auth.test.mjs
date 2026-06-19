@@ -50,6 +50,9 @@ async function startServer() {
 test("local server requires bearer token when auth mode is required", async () => {
   const { child, port } = await startServer();
   try {
+    const health = await fetch(`http://127.0.0.1:${port}/health`);
+    assert.equal(health.status, 200);
+
     const preflight = await fetch(`http://127.0.0.1:${port}/matches/auth-match/projection`, {
       method: "OPTIONS",
       headers: {

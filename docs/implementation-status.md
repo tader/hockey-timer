@@ -49,6 +49,8 @@
   - backend handlers and local server can require bearer tokens
   - OIDC/JWKS validation is configured by environment
   - CORS responses include authorization preflight support for hosted web sync
+  - container health checks use unauthenticated `/health` so Traefik can route
+    the authenticated API service
   - web app uses OIDC Authorization Code + PKCE sign-in and sends bearer tokens
   - Apple match sync attaches stored bearer auth and mirrors auth state from
     iPhone to watch through Watch Connectivity

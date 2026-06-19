@@ -381,6 +381,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (req.method === "GET" && url.pathname === "/health") {
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   const upsertMatch = url.pathname.match(/^\/matches\/([^/]+)\/events:batchUpsert$/);
   const eventsMatch = url.pathname.match(/^\/matches\/([^/]+)\/events$/);
   const projectionMatch = url.pathname.match(/^\/matches\/([^/]+)\/projection$/);
