@@ -2,6 +2,7 @@ export type TeamSide = "home" | "away";
 
 export type MatchEventType =
   | "match.created"
+  | "match.updated"
   | "match.started"
   | "match.paused"
   | "match.resumed"

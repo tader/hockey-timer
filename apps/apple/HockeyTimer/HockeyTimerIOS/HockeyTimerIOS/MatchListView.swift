@@ -114,6 +114,7 @@ struct MatchListView: View {
     @State private var filterAway = ""
     @State private var filterClub = ""
     @State private var filterTeam = ""
+    @State private var syncMessage = ""
     private let hasInjectedMatches: Bool
     private let persistenceEnabled: Bool
 
@@ -130,6 +131,11 @@ struct MatchListView: View {
         List {
             Section("Account") {
                 AppleAuthAccountView()
+                if !syncMessage.isEmpty {
+                    Text(syncMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Filters") {
@@ -232,6 +238,36 @@ struct MatchListView: View {
         .onAppear {
             if persistenceEnabled && !hasInjectedMatches {
                 matches = MatchStore.shared.load()
+                refreshRemoteMatches()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppleApiEndpointSync.authStateDidChange)) { _ in
+            refreshRemoteMatches()
+        }
+    }
+
+    private func refreshRemoteMatches() {
+        guard persistenceEnabled else { return }
+        guard AppleApiEndpointSync.shared.currentAuthorizationHeader() != nil else {
+            syncMessage = "Signed out. Showing local matches."
+            return
+        }
+
+        syncMessage = "Loading signed-in matches..."
+        Task {
+            do {
+                let remoteMatches = try await RemoteMatchCatalogClient().fetchMatches()
+                await MainActor.run {
+                    MatchStore.shared.merge(remoteMatches)
+                    matches = MatchStore.shared.load()
+                    syncMessage = remoteMatches.isEmpty
+                        ? "No signed-in matches found."
+                        : "Loaded \(remoteMatches.count) signed-in matches."
+                }
+            } catch {
+                await MainActor.run {
+                    syncMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -291,6 +327,19 @@ final class MatchStore {
             items[existingIndex] = match
         } else {
             items.append(match)
+        }
+        save(items)
+    }
+
+    func merge(_ remoteMatches: [MatchListItem]) {
+        guard !remoteMatches.isEmpty else { return }
+        var items = load()
+        for match in remoteMatches {
+            if let existingIndex = items.firstIndex(where: { $0.id == match.id }) {
+                items[existingIndex] = match
+            } else {
+                items.append(match)
+            }
         }
         save(items)
     }

@@ -27,6 +27,10 @@ export function getEvents(matchId: string): MatchEvent[] {
   return eventsByMatch.get(matchId) ?? [];
 }
 
+export function listEvents(): MatchEvent[] {
+  return Array.from(eventsByMatch.values()).flat();
+}
+
 // Test hook for deterministic unit tests.
 export function __resetStoreForTests(): void {
   eventsByMatch.clear();

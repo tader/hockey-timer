@@ -14,6 +14,8 @@ final class AppleApiEndpointSync: NSObject, WCSessionDelegate {
 
     private override init() {}
 
+    static let authStateDidChange = Notification.Name("hockey_timer_auth_state_did_change")
+
     func start() {
         guard WCSession.isSupported(), !isStarted else { return }
         isStarted = true
@@ -37,12 +39,18 @@ final class AppleApiEndpointSync: NSObject, WCSessionDelegate {
         UserDefaults.standard.set(sanitized, forKey: Self.authAccessTokenKey)
         UserDefaults.standard.set(expiresAt.timeIntervalSince1970, forKey: Self.authExpiresAtKey)
         publishCurrentAuthState()
+        NotificationCenter.default.post(name: Self.authStateDidChange, object: nil)
     }
 
     func clearAuthState() {
         UserDefaults.standard.removeObject(forKey: Self.authAccessTokenKey)
         UserDefaults.standard.removeObject(forKey: Self.authExpiresAtKey)
         publishCurrentAuthState()
+        NotificationCenter.default.post(name: Self.authStateDidChange, object: nil)
+    }
+
+    func currentEndpoint(default defaultValue: String) -> String {
+        UserDefaults.standard.string(forKey: Self.apiBaseKey) ?? defaultValue
     }
 
     func currentAuthorizationHeader() -> String? {

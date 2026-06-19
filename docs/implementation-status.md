@@ -56,6 +56,8 @@
     `ASWebAuthenticationSession` and mirrors access tokens to the watch
   - iPhone account sign-in controls are visible from the match list and detail
     views
+  - hosted API exposes an authenticated match catalog derived from match
+    metadata events, and iPhone merges it into the local match list
   - Apple match sync attaches stored bearer auth and mirrors auth state from
     iPhone to watch through Watch Connectivity
 - KNHB parsing hardened in web import flow:

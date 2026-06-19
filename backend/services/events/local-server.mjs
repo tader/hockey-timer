@@ -104,6 +104,38 @@ function sortEvents(events) {
   });
 }
 
+function stringPayload(payload, key) {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function catalogFromEvents(events) {
+  const byId = new Map();
+  for (const event of sortEvents(events)) {
+    if (event.eventType !== "match.created" && event.eventType !== "match.updated") continue;
+
+    const payload = event.payload || {};
+    const existing = byId.get(event.matchId);
+    byId.set(event.matchId, {
+      id: event.matchId,
+      source: stringPayload(payload, "source") || existing?.source || "remote",
+      createdAt: existing?.createdAt || event.occurredAt,
+      matchDateTime: stringPayload(payload, "matchDateTime") || existing?.matchDateTime,
+      homeTeam: stringPayload(payload, "homeTeam") || existing?.homeTeam || "Home",
+      awayTeam: stringPayload(payload, "awayTeam") || existing?.awayTeam || "Away",
+      clubName: stringPayload(payload, "clubName") || stringPayload(payload, "location") || existing?.clubName,
+      teamName: stringPayload(payload, "teamName") || existing?.teamName,
+      knhbMatchId: stringPayload(payload, "knhbMatchId") || existing?.knhbMatchId,
+    });
+  }
+
+  return Array.from(byId.values()).sort((left, right) => {
+    const leftDate = left.matchDateTime || left.createdAt;
+    const rightDate = right.matchDateTime || right.createdAt;
+    return rightDate.localeCompare(leftDate);
+  });
+}
+
 async function createSqliteStore() {
   const sqlitePath = process.env.SQLITE_PATH || "data/hockey-timer.sqlite";
   await mkdir(dirname(sqlitePath), { recursive: true });
@@ -160,6 +192,13 @@ async function createSqliteStore() {
     },
     async getEvents(matchId) {
       return selectByMatch.all(matchId).map((row) => JSON.parse(row.event_json));
+    },
+    async listEvents() {
+      return db.prepare(`
+        SELECT event_json
+        FROM match_events
+        ORDER BY occurred_at, origin_device_id, sequence
+      `).all().map((row) => JSON.parse(row.event_json));
     },
   };
 }
@@ -219,6 +258,14 @@ async function createPostgresStore() {
         `,
         [matchId],
       );
+      return result.rows.map((row) => row.event_json);
+    },
+    async listEvents() {
+      const result = await pool.query(`
+        SELECT event_json
+        FROM match_events
+        ORDER BY occurred_at, origin_device_id, sequence
+      `);
       return result.rows.map((row) => row.event_json);
     },
   };
@@ -386,6 +433,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const matchesRoute = url.pathname === "/matches";
   const upsertMatch = url.pathname.match(/^\/matches\/([^/]+)\/events:batchUpsert$/);
   const eventsMatch = url.pathname.match(/^\/matches\/([^/]+)\/events$/);
   const projectionMatch = url.pathname.match(/^\/matches\/([^/]+)\/projection$/);
@@ -394,6 +442,7 @@ const server = http.createServer(async (req, res) => {
   const knhbUpcomingMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/upcoming$/);
   const knhbOfficialMatch = url.pathname.match(/^\/knhb\/teams\/([^/]+)\/matches\/official$/);
   const isApiRoute =
+    matchesRoute ||
     upsertMatch ||
     eventsMatch ||
     projectionMatch ||
@@ -408,6 +457,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 401, { error: auth.error });
       return;
     }
+  }
+
+  if (req.method === "GET" && matchesRoute) {
+    sendJson(res, 200, { matches: catalogFromEvents(await eventStore.listEvents()) });
+    return;
   }
 
   if (req.method === "POST" && upsertMatch) {

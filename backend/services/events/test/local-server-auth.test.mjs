@@ -72,6 +72,35 @@ test("local server requires bearer token when auth mode is required", async () =
       headers: { authorization: "Bearer local-test-token" },
     });
     assert.equal(authorized.status, 200);
+
+    const metadataEvent = {
+      eventId: "11111111-1111-4111-8111-111111111111",
+      matchId: "remote-match",
+      eventType: "match.created",
+      occurredAt: "2026-03-15T14:00:00.000Z",
+      originDeviceId: "test",
+      originPlatform: "web",
+      sequence: 1,
+      payload: { homeTeam: "Remote Home", awayTeam: "Remote Away" },
+      version: 1,
+    };
+    const upsert = await fetch(`http://127.0.0.1:${port}/matches/remote-match/events:batchUpsert`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer local-test-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ events: [metadataEvent] }),
+    });
+    assert.equal(upsert.status, 200);
+
+    const catalog = await fetch(`http://127.0.0.1:${port}/matches`, {
+      headers: { authorization: "Bearer local-test-token" },
+    });
+    assert.equal(catalog.status, 200);
+    const body = await catalog.json();
+    assert.equal(body.matches[0].id, "remote-match");
+    assert.equal(body.matches[0].homeTeam, "Remote Home");
   } finally {
     child.kill();
   }

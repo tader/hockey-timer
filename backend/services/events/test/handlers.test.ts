@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { batchUpsertHandler, listEventsHandler, projectionHandler } from "../src/handlers.ts";
+import { batchUpsertHandler, listEventsHandler, listMatchesHandler, projectionHandler } from "../src/handlers.ts";
 import { __resetStoreForTests } from "../src/store.ts";
 import type { MatchEvent } from "@hockey-timer/event-schema";
 
@@ -99,4 +99,54 @@ test("listEventsHandler and projectionHandler expose ordered events and projecti
   assert.equal(projectionBody.awayScore, 1);
   assert.equal(projectionBody.isRunning, false);
   assert.equal(projectionBody.totalPlayedSeconds, 120);
+});
+
+test("listMatchesHandler derives match catalog from metadata events", async () => {
+  __resetStoreForTests();
+  await batchUpsertHandler({
+    pathParameters: { id: "catalog-match" },
+    body: JSON.stringify({
+      events: [
+        buildEvent({
+          eventId: "11111111-1111-4111-8111-111111111111",
+          matchId: "catalog-match",
+          eventType: "match.created",
+          payload: {
+            source: "web-custom",
+            homeTeam: "Blue",
+            awayTeam: "White",
+            matchDateTime: "2026-03-16T12:00:00.000Z",
+            location: "Main Club",
+            knhbMatchId: "knhb-1",
+          },
+        }),
+        buildEvent({
+          eventId: "22222222-2222-4222-8222-222222222222",
+          matchId: "catalog-match",
+          eventType: "match.updated",
+          occurredAt: "2026-03-15T14:01:00.000Z",
+          sequence: 2,
+          payload: {
+            source: "web-custom",
+            homeTeam: "Blue Updated",
+            awayTeam: "White",
+            matchDateTime: "2026-03-16T12:00:00.000Z",
+            teamName: "Ladies 1",
+          },
+        }),
+      ],
+    }),
+  });
+
+  const response = await listMatchesHandler({});
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    matches: Array<{ id: string; homeTeam: string; awayTeam: string; clubName?: string; teamName?: string }>;
+  };
+  assert.equal(body.matches.length, 1);
+  assert.equal(body.matches[0].id, "catalog-match");
+  assert.equal(body.matches[0].homeTeam, "Blue Updated");
+  assert.equal(body.matches[0].clubName, "Main Club");
+  assert.equal(body.matches[0].teamName, "Ladies 1");
 });
