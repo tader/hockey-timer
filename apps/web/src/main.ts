@@ -186,16 +186,7 @@ function randomBase64Url(byteCount: number): string {
   return base64UrlEncode(bytes.buffer);
 }
 
-function providerParameter(provider: string): string {
-  switch (provider) {
-    case "apple": return "Apple";
-    case "google": return "Google";
-    case "github": return "GitHub";
-    default: return provider;
-  }
-}
-
-async function beginSignIn(provider = "default"): Promise<void> {
+async function beginSignIn(): Promise<void> {
   if (!authConfigured()) {
     uiState.output = "Authentication is not configured.";
     render();
@@ -218,11 +209,6 @@ async function beginSignIn(provider = "default"): Promise<void> {
   url.searchParams.set("code_challenge_method", "S256");
   if (AUTH_AUDIENCE) {
     url.searchParams.set("audience", AUTH_AUDIENCE);
-  }
-  if (provider !== "default") {
-    const hint = providerParameter(provider);
-    url.searchParams.set("identity_provider", hint);
-    url.searchParams.set("connection", hint);
   }
   window.location.assign(url.toString());
 }
@@ -1459,17 +1445,9 @@ function renderAuthPanel(): string {
   return `
     <section class="auth-panel">
       <span>${status}</span>
-      <div class="auth-actions">
-        ${
-          signedIn
-            ? `<button id="signOut" class="ghost">Sign Out</button>`
-            : `
-              <button class="js-sign-in" data-provider="apple" ${configured ? "" : "disabled"}>Sign in with Apple</button>
-              <button class="js-sign-in" data-provider="google" ${configured ? "" : "disabled"}>Sign in with Google</button>
-              <button class="js-sign-in" data-provider="github" ${configured ? "" : "disabled"}>Sign in with GitHub</button>
-            `
-        }
-      </div>
+      ${signedIn
+        ? `<button id="signOut" class="ghost">Sign Out</button>`
+        : `<button id="signIn" ${configured ? "" : "disabled"}>Sign In</button>`}
     </section>
   `;
 }
@@ -1935,10 +1913,8 @@ function initKeyboardShortcuts(): void {
 }
 
 function wireHandlers(): void {
-  appRoot.querySelectorAll<HTMLButtonElement>(".js-sign-in").forEach((button) => {
-    button.addEventListener("click", () => {
-      void beginSignIn(button.dataset.provider ?? "default");
-    });
+  appRoot.querySelector<HTMLButtonElement>("#signIn")?.addEventListener("click", () => {
+    void beginSignIn();
   });
 
   appRoot.querySelector<HTMLButtonElement>("#signOut")?.addEventListener("click", () => {
