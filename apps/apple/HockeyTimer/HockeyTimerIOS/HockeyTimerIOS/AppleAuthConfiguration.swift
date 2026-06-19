@@ -2,7 +2,7 @@ import Foundation
 
 enum AppleAuthConfiguration {
     static let domain = "tader.eu.auth0.com"
-    static let clientID = ""
+    static let clientID = "TMas7nc1PhWNlZEFNpMO8ZuVOtNhiAfT"
     static let audience = "https://hockey-api.tader.nl"
     static let callbackScheme = "nl.thomsoft.hockeytimerios"
     static let redirectURI = "\(callbackScheme)://auth/callback"
