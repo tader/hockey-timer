@@ -54,6 +54,8 @@
   - web app uses OIDC Authorization Code + PKCE sign-in and sends bearer tokens
   - iPhone app can use Auth0 Universal Login through native
     `ASWebAuthenticationSession` and mirrors access tokens to the watch
+  - iPhone account sign-in controls are visible from the match list and detail
+    views
   - Apple match sync attaches stored bearer auth and mirrors auth state from
     iPhone to watch through Watch Connectivity
 - KNHB parsing hardened in web import flow:

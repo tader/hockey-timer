@@ -128,6 +128,10 @@ struct MatchListView: View {
 
     var body: some View {
         List {
+            Section("Account") {
+                AppleAuthAccountView()
+            }
+
             Section("Filters") {
                 TextField("Home team", text: $filterHome)
                     .textInputAutocapitalization(.never)
