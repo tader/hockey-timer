@@ -50,6 +50,18 @@ async function startServer() {
 test("local server requires bearer token when auth mode is required", async () => {
   const { child, port } = await startServer();
   try {
+    const preflight = await fetch(`http://127.0.0.1:${port}/matches/auth-match/projection`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://hockey.tader.nl",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+    assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /authorization/);
+
     const unauthorized = await fetch(`http://127.0.0.1:${port}/matches/auth-match/projection`);
     assert.equal(unauthorized.status, 401);
 

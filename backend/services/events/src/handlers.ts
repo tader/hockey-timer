@@ -16,10 +16,19 @@ type ApiResult = {
   body: string;
 };
 
-const JSON_HEADERS = { "content-type": "application/json" };
+const CORS_HEADERS = {
+  "access-control-allow-headers": "authorization,content-type",
+  "access-control-allow-methods": "GET,POST,OPTIONS",
+  "access-control-allow-origin": "*",
+};
+const JSON_HEADERS = { ...CORS_HEADERS, "content-type": "application/json" };
 
 function json(statusCode: number, payload: object): ApiResult {
   return { statusCode, headers: JSON_HEADERS, body: JSON.stringify(payload) };
+}
+
+export function optionsHandler(): ApiResult {
+  return { statusCode: 204, headers: CORS_HEADERS, body: "" };
 }
 
 export async function batchUpsertHandler(event: ApiEvent): Promise<ApiResult> {

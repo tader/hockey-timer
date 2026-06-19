@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { batchUpsertHandler, listEventsHandler, projectionHandler } from "../src/handlers.ts";
+import { batchUpsertHandler, listEventsHandler, optionsHandler, projectionHandler } from "../src/handlers.ts";
 import { __resetStoreForTests } from "../src/store.ts";
 import type { MatchEvent } from "@hockey-timer/event-schema";
 
@@ -40,6 +40,8 @@ test("match API rejects missing bearer token when auth is required", async () =>
     body: JSON.stringify({ events: [buildEvent()] }),
   });
   assert.equal(upsert.statusCode, 401);
+  assert.equal(upsert.headers["access-control-allow-origin"], "*");
+  assert.match(upsert.headers["access-control-allow-headers"], /authorization/);
 
   const events = await listEventsHandler({ pathParameters: { id: "auth-match" } });
   assert.equal(events.statusCode, 401);
@@ -59,4 +61,16 @@ test("match API accepts configured bearer token when auth is required", async ()
   });
 
   assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["access-control-allow-origin"], "*");
+});
+
+test("match API exposes an unauthenticated CORS preflight handler", () => {
+  process.env.AUTH_MODE = "required";
+
+  const response = optionsHandler();
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.headers["access-control-allow-origin"], "*");
+  assert.match(response.headers["access-control-allow-methods"], /OPTIONS/);
+  assert.match(response.headers["access-control-allow-headers"], /authorization/);
 });
