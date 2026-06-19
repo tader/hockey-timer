@@ -58,6 +58,8 @@
     views
   - hosted API exposes an authenticated match catalog derived from match
     metadata events, and iPhone merges it into the local match list
+  - iPhone match list supports pull-to-refresh and publishes phone-created
+    match metadata so the web app can discover those matches
   - Apple match sync attaches stored bearer auth and mirrors auth state from
     iPhone to watch through Watch Connectivity
 - KNHB parsing hardened in web import flow:

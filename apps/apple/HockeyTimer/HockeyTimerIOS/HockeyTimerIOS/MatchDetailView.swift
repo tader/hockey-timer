@@ -99,6 +99,7 @@ struct MatchDetailView: View {
                     editableMatch = updated
                     if persistsMetadata {
                         MatchStore.shared.upsert(updated)
+                        publishMatchMetadata(updated)
                     }
                     onMetadataSaved?(updated)
                 }
@@ -110,6 +111,12 @@ struct MatchDetailView: View {
         }
         .onReceive(poller) { _ in
             model.refreshProjection()
+        }
+    }
+
+    private func publishMatchMetadata(_ match: MatchListItem) {
+        Task {
+            try? await RemoteMatchCatalogClient().publishMetadata(match, eventType: "match.updated")
         }
     }
 }

@@ -210,6 +210,7 @@ struct MatchListView: View {
                         if persistenceEnabled {
                             MatchStore.shared.upsert(created)
                             matches = MatchStore.shared.load()
+                            publishMatchMetadata(created, eventType: "match.created")
                         } else {
                             upsertInMemory(created)
                         }
@@ -227,6 +228,7 @@ struct MatchListView: View {
                         if persistenceEnabled {
                             MatchStore.shared.upsert(imported)
                             matches = MatchStore.shared.load()
+                            publishMatchMetadata(imported, eventType: "match.created")
                         } else {
                             upsertInMemory(imported)
                         }
@@ -241,6 +243,9 @@ struct MatchListView: View {
                 refreshRemoteMatches()
             }
         }
+        .refreshable {
+            await loadRemoteMatches()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppleApiEndpointSync.authStateDidChange)) { _ in
             refreshRemoteMatches()
         }
@@ -248,22 +253,45 @@ struct MatchListView: View {
 
     private func refreshRemoteMatches() {
         guard persistenceEnabled else { return }
+        Task {
+            await loadRemoteMatches()
+        }
+    }
+
+    private func loadRemoteMatches() async {
+        guard persistenceEnabled else { return }
         guard AppleApiEndpointSync.shared.currentAuthorizationHeader() != nil else {
-            syncMessage = "Signed out. Showing local matches."
+            await MainActor.run {
+                syncMessage = "Signed out. Showing local matches."
+            }
             return
         }
 
-        syncMessage = "Loading signed-in matches..."
+        await MainActor.run {
+            syncMessage = "Loading signed-in matches..."
+        }
+        do {
+            let remoteMatches = try await RemoteMatchCatalogClient().fetchMatches()
+            await MainActor.run {
+                MatchStore.shared.merge(remoteMatches)
+                matches = MatchStore.shared.load()
+                syncMessage = remoteMatches.isEmpty
+                    ? "No signed-in matches found."
+                    : "Loaded \(remoteMatches.count) signed-in matches."
+            }
+        } catch {
+            await MainActor.run {
+                syncMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func publishMatchMetadata(_ match: MatchListItem, eventType: String) {
+        guard persistenceEnabled else { return }
         Task {
             do {
-                let remoteMatches = try await RemoteMatchCatalogClient().fetchMatches()
-                await MainActor.run {
-                    MatchStore.shared.merge(remoteMatches)
-                    matches = MatchStore.shared.load()
-                    syncMessage = remoteMatches.isEmpty
-                        ? "No signed-in matches found."
-                        : "Loaded \(remoteMatches.count) signed-in matches."
-                }
+                try await RemoteMatchCatalogClient().publishMetadata(match, eventType: eventType)
+                await loadRemoteMatches()
             } catch {
                 await MainActor.run {
                     syncMessage = error.localizedDescription

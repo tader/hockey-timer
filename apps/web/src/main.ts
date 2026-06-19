@@ -58,7 +58,7 @@ type MatchScore = {
 
 type MatchMetadata = {
   id: string;
-  source: "web-custom" | "knhb" | "local";
+  source: "web-custom" | "ios-custom" | "knhb" | "local";
   createdAt: string;
   matchDateTime?: string;
   homeTeam: string;
@@ -119,7 +119,7 @@ type UIState = {
   filterTeam: string;
   filterClub: string;
   filterField: string;
-  filterSource: "all" | "web-custom" | "knhb" | "local";
+  filterSource: "all" | "web-custom" | "ios-custom" | "knhb" | "local";
   liveNowMs: number;
   listScores: Record<string, MatchScore>;
   listScoresRefreshing: boolean;
@@ -418,9 +418,7 @@ function loadMatches(): MatchMetadata[] {
       const raw = item as Record<string, unknown>;
       normalized.push({
         id: String(raw.id),
-        source: (raw.source === "web-custom" || raw.source === "knhb" || raw.source === "local")
-          ? raw.source
-          : "local",
+        source: normalizeMatchSource(raw.source),
         createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
         matchDateTime: typeof raw.matchDateTime === "string" ? raw.matchDateTime : undefined,
         homeTeam: typeof raw.homeTeam === "string" ? raw.homeTeam : "Home",
@@ -451,6 +449,14 @@ function loadMatches(): MatchMetadata[] {
 
 function saveMatches(matches: MatchMetadata[]): void {
   localStorage.setItem(matchesKey, JSON.stringify(matches));
+}
+
+function normalizeMatchSource(source: unknown): MatchMetadata["source"] {
+  if (source === "web-custom" || source === "knhb" || source === "local" || source === "ios-custom") {
+    return source;
+  }
+  if (source === "custom") return "ios-custom";
+  return "local";
 }
 
 function loadFavoriteTeams(): FavoriteTeam[] {
@@ -529,6 +535,39 @@ function upsertMatch(match: MatchMetadata): void {
     uiState.matches.push(match);
   }
   saveMatches(uiState.matches);
+}
+
+async function refreshRemoteMatches(): Promise<void> {
+  if (!authConfigured() || !loadAuthState()) {
+    uiState.output = "Sign in to load hosted matches.";
+    render();
+    return;
+  }
+
+  const response = await authFetch(`${API_BASE}/matches`);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`matches fetch failed: ${response.status} ${text}`);
+  }
+
+  const payload = JSON.parse(text) as { matches?: Array<Record<string, unknown>> };
+  const remoteMatches = (payload.matches ?? []).map((raw) => ({
+    id: String(raw.id),
+    source: normalizeMatchSource(raw.source),
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+    matchDateTime: typeof raw.matchDateTime === "string" ? raw.matchDateTime : undefined,
+    homeTeam: typeof raw.homeTeam === "string" ? raw.homeTeam : "Home",
+    awayTeam: typeof raw.awayTeam === "string" ? raw.awayTeam : "Away",
+    locationClubName: typeof raw.clubName === "string" ? raw.clubName : undefined,
+    fieldName: typeof raw.teamName === "string" ? raw.teamName : undefined,
+    knhbMatchId: typeof raw.knhbMatchId === "string" ? raw.knhbMatchId : undefined,
+  }));
+
+  for (const match of remoteMatches) {
+    upsertMatch(match);
+  }
+  uiState.output = `Loaded ${remoteMatches.length} hosted matches.`;
+  render();
 }
 
 function createQuickMatch(): MatchMetadata {
@@ -1381,6 +1420,7 @@ function renderListView(): string {
         <div class="row">
           <span class="muted">${rows.length} shown</span>
           <button id="clearFilters" class="ghost">Clear Filters</button>
+          <button id="refreshMatches" class="ghost">Refresh Matches</button>
           <button id="newMatch">New Match</button>
           <button id="quickMatchList" class="ghost">Quick Match</button>
         </div>
@@ -1395,6 +1435,7 @@ function renderListView(): string {
           <option value="all" ${uiState.filterSource === "all" ? "selected" : ""}>All sources</option>
           <option value="knhb" ${uiState.filterSource === "knhb" ? "selected" : ""}>KNHB</option>
           <option value="web-custom" ${uiState.filterSource === "web-custom" ? "selected" : ""}>Web custom</option>
+          <option value="ios-custom" ${uiState.filterSource === "ios-custom" ? "selected" : ""}>iPhone custom</option>
           <option value="local" ${uiState.filterSource === "local" ? "selected" : ""}>Local</option>
         </select>
       </div>
@@ -1997,6 +2038,13 @@ function wireHandlers(): void {
     void refreshListScores();
   });
 
+  appRoot.querySelector<HTMLButtonElement>("#refreshMatches")?.addEventListener("click", () => {
+    void refreshRemoteMatches().catch((error) => {
+      uiState.output = (error as Error).message;
+      render();
+    });
+  });
+
   appRoot.querySelector<HTMLButtonElement>("#quickMatchList")?.addEventListener("click", () => {
     const metadata = createQuickMatch();
     upsertMatch(metadata);
@@ -2279,6 +2327,12 @@ function wireHandlers(): void {
 
 void completeAuthRedirect().finally(() => {
   render();
+  if (loadAuthState()) {
+    void refreshRemoteMatches().catch((error) => {
+      uiState.output = (error as Error).message;
+      render();
+    });
+  }
 });
 initKeyboardShortcuts();
 void refreshProjection();
