@@ -65,6 +65,8 @@
 - KNHB parsing hardened in web import flow:
   - dedicated parser module with guards against timestamp-like team fields
   - away-team timestamp regression covered by unit tests
+- KNHB proxy now detects HockeyWeerelt self-redirect loops and returns a clear
+  upstream error instead of a generic fetch failure.
 
 ## In Progress
 - End-to-end product hardening and broader multi-device sync validation.

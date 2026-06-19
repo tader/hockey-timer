@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import net from "node:net";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ async function freePort() {
   return address.port;
 }
 
-async function startServer() {
+async function startServer(extraEnv = {}) {
   const port = await freePort();
   const child = spawn(process.execPath, ["local-server.mjs"], {
     cwd: process.cwd(),
@@ -25,6 +26,7 @@ async function startServer() {
       PORT: String(port),
       STORAGE_DRIVER: "sqlite",
       SQLITE_PATH: ":memory:",
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -45,6 +47,17 @@ async function startServer() {
   }
 
   return { child, port };
+}
+
+async function startRedirectLoopServer() {
+  const port = await freePort();
+  const server = http.createServer((req, res) => {
+    res.writeHead(301, { location: `http://127.0.0.1:${port}${req.url}` });
+    res.end();
+  });
+  server.listen(port, "127.0.0.1");
+  await once(server, "listening");
+  return { server, port };
 }
 
 test("local server requires bearer token when auth mode is required", async () => {
@@ -103,5 +116,24 @@ test("local server requires bearer token when auth mode is required", async () =
     assert.equal(body.matches[0].homeTeam, "Remote Home");
   } finally {
     child.kill();
+  }
+});
+
+test("local server reports KNHB upstream redirect loops clearly", async () => {
+  const upstream = await startRedirectLoopServer();
+  const { child, port } = await startServer({
+    KNHB_BASE_URL: `http://127.0.0.1:${upstream.port}`,
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/knhb/clubs`, {
+      headers: { authorization: "Bearer local-test-token" },
+    });
+    assert.equal(response.status, 502);
+    const body = await response.json();
+    assert.equal(body.error, "knhb proxy failed");
+    assert.match(body.details, /redirect loop/);
+  } finally {
+    child.kill();
+    upstream.server.close();
   }
 });

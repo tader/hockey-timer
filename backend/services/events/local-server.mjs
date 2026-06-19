@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8787);
-const KNHB_BASE = "https://publicaties.hockeyweerelt.nl/mc";
+const KNHB_BASE = process.env.KNHB_BASE_URL || "https://publicaties.hockeyweerelt.nl/mc";
 
 let eventStore;
 let cachedJwks;
@@ -389,9 +389,7 @@ function sendJson(res, statusCode, payload) {
 async function proxyKnhbJson(res, path) {
   const target = `${KNHB_BASE}${path}`;
   try {
-    const response = await fetch(target, {
-      headers: { accept: "application/json" },
-    });
+    const response = await fetchWithRedirectGuard(target);
 
     const text = await response.text();
     const contentType = response.headers.get("content-type") || "application/json";
@@ -409,6 +407,28 @@ async function proxyKnhbJson(res, path) {
       target,
     });
   }
+}
+
+async function fetchWithRedirectGuard(target) {
+  let current = target;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(current, {
+      headers: { accept: "application/json" },
+      redirect: "manual",
+    });
+    const location = response.headers.get("location");
+    if (response.status < 300 || response.status >= 400 || !location) {
+      return response;
+    }
+
+    const next = new URL(location, current).toString();
+    if (next === current) {
+      throw new Error(`knhb upstream redirect loop: ${current}`);
+    }
+    current = next;
+  }
+
+  throw new Error(`knhb upstream too many redirects: ${target}`);
 }
 
 const server = http.createServer(async (req, res) => {
