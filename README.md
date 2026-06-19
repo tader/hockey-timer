@@ -41,6 +41,8 @@ Delivery policy: implement new user features in web first, then iOS/watch with p
   Open decisions and ADR-style tracking.
 - `docs/watch-wireframes.md`:
   Apple Watch screen wireframes and interaction concepts for fast in-match usage.
+- `docs/apple-auth0-setup.md`:
+  Auth0 native-app setup for iPhone sign-in and watch token handoff.
 
 ## Immediate Next Step
 Implement end-to-end event flow for one demo match:

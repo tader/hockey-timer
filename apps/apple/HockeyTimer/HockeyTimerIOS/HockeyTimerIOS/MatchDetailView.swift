@@ -11,6 +11,7 @@ struct MatchDetailView: View {
     @State private var authStatusLabel = AppleApiEndpointSync.shared.currentAuthStatusLabel()
     @State private var authMessage = "Sign in on iPhone to sync through the hosted API and paired watch."
     @State private var isEditingMetadata = false
+    @State private var isSigningIn = false
 
     init(
         match: MatchListItem = MatchListItem(id: "demo-match", source: "local", homeTeam: "Home", awayTeam: "Away"),
@@ -69,17 +70,10 @@ struct MatchDetailView: View {
             Text(authMessage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack {
-                Button("Sign in with Apple") {
-                    handleSignIn(provider: "Apple")
-                }
-                Button("Sign in with Google") {
-                    handleSignIn(provider: "Google")
-                }
-                Button("Sign in with GitHub") {
-                    handleSignIn(provider: "GitHub")
-                }
+            Button(isSigningIn ? "Signing In..." : "Sign In") {
+                handleSignIn()
             }
+            .disabled(isSigningIn)
             Button("Sign Out") {
                 AppleApiEndpointSync.shared.clearAuthState()
                 refreshAuthStatus(message: "Signed out. Local match operation still works.")
@@ -132,10 +126,29 @@ struct MatchDetailView: View {
         }
     }
 
-    private func handleSignIn(provider: String) {
-        refreshAuthStatus(
-            message: "\(provider) sign-in needs managed provider configuration. Local match operation still works."
-        )
+    private func handleSignIn() {
+        guard AppleAuthConfiguration.isConfigured else {
+            refreshAuthStatus(message: "Configure Auth0 client id in AppleAuthConfiguration.swift.")
+            return
+        }
+
+        isSigningIn = true
+        refreshAuthStatus(message: "Opening \(AppleAuthConfiguration.issuerLabel) sign-in.")
+        AppleAuthSession.shared.signIn { result in
+            DispatchQueue.main.async {
+                isSigningIn = false
+                switch result {
+                case .success(let token):
+                    AppleApiEndpointSync.shared.updateAuthState(
+                        accessToken: token.accessToken,
+                        expiresAt: token.expiresAt
+                    )
+                    refreshAuthStatus(message: "Signed in. Watch sync state updated.")
+                case .failure(let error):
+                    refreshAuthStatus(message: error.localizedDescription)
+                }
+            }
+        }
     }
 
     private func refreshAuthStatus(message: String) {
