@@ -3,6 +3,7 @@ import {
   parseKNHBMatchItem,
   toImportedMatchMetadata,
 } from "./knhb-parsing.js";
+import { parsePeriodConfig, splitDuration } from "./match-format.js";
 
 type RuntimeConfig = {
   __API_BASE__?: string;
@@ -893,18 +894,6 @@ function hasMatchStarted(events: MatchEvent[]): boolean {
   ));
 }
 
-function parsePeriodConfig(periodCountRaw: string, periodMinutesRaw: string): { periodCount: number; periodDurationSeconds: number[] } {
-  const parsedCount = Number(periodCountRaw);
-  const parsedMinutes = Number(periodMinutesRaw);
-  const periodCount = Math.max(1, Math.min(12, Number.isFinite(parsedCount) ? Math.round(parsedCount) : 4));
-  const periodMinutes = Math.max(1, Math.min(60, Number.isFinite(parsedMinutes) ? parsedMinutes : 17.5));
-  const durationSeconds = Math.round(periodMinutes * 60);
-  return {
-    periodCount,
-    periodDurationSeconds: Array.from({ length: periodCount }, () => durationSeconds),
-  };
-}
-
 function ordinal(value: number): string {
   const mod100 = value % 100;
   if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
@@ -1520,7 +1509,8 @@ function renderCreateView(): string {
               <input id="createLocationClub" type="text" placeholder="Location (optional)" />
               <input id="createFieldName" type="text" placeholder="Field name (optional)" />
               <input id="createPeriodCount" type="number" min="1" max="12" step="1" value="4" placeholder="Periods" />
-              <input id="createPeriodMinutes" type="number" min="1" max="60" step="0.5" value="17.5" placeholder="Minutes per period" />
+              <input id="createPeriodMinutes" type="number" min="0" max="180" step="1" value="17" placeholder="Minutes per period" />
+              <input id="createPeriodSeconds" type="number" min="0" max="59" step="1" value="30" placeholder="Seconds per period" />
               <label for="createDateTime">Match date/time</label>
               <input id="createDateTime" type="datetime-local" />
               <button id="createMatch">Create Custom Match</button>
@@ -1703,7 +1693,8 @@ function renderMatchView(match: MatchMetadata): string {
               <input id="editFieldName" value="${escapeHtml(match.fieldName ?? "")}" placeholder="Field name" />
               <input id="editKNHBMatchId" value="${escapeHtml(match.knhbMatchId ?? "")}" placeholder="KNHB Match ID" />
               <input id="editPeriodCount" type="number" min="1" max="12" step="1" value="${String(local.format.periodCount)}" placeholder="Periods" />
-              <input id="editPeriodMinutes" type="number" min="1" max="60" step="0.5" value="${String((local.format.periodDurationSeconds[0] ?? 1050) / 60)}" placeholder="Minutes per period" />
+              <input id="editPeriodMinutes" type="number" min="0" max="180" step="1" value="${String(splitDuration(local.format.periodDurationSeconds[0] ?? 1050).minutes)}" placeholder="Minutes per period" />
+              <input id="editPeriodSeconds" type="number" min="0" max="59" step="1" value="${String(splitDuration(local.format.periodDurationSeconds[0] ?? 1050).seconds)}" placeholder="Seconds per period" />
             </div>
             <div class="row">
               <label for="editDateTime" class="muted">Match date/time (Europe/Amsterdam)</label>
@@ -2133,7 +2124,8 @@ function wireHandlers(): void {
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#createDateTime")?.value ?? "";
     const periodCountRaw = appRoot.querySelector<HTMLInputElement>("#createPeriodCount")?.value ?? "";
     const periodMinutesRaw = appRoot.querySelector<HTMLInputElement>("#createPeriodMinutes")?.value ?? "";
-    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw);
+    const periodSecondsRaw = appRoot.querySelector<HTMLInputElement>("#createPeriodSeconds")?.value ?? "";
+    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw, periodSecondsRaw);
     const metadata: MatchMetadata = {
       id: `web-${crypto.randomUUID().toLowerCase()}`,
       source: "web-custom",
@@ -2288,7 +2280,8 @@ function wireHandlers(): void {
     const knhbMatchId = (appRoot.querySelector<HTMLInputElement>("#editKNHBMatchId")?.value ?? "").trim();
     const periodCountRaw = appRoot.querySelector<HTMLInputElement>("#editPeriodCount")?.value ?? "";
     const periodMinutesRaw = appRoot.querySelector<HTMLInputElement>("#editPeriodMinutes")?.value ?? "";
-    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw);
+    const periodSecondsRaw = appRoot.querySelector<HTMLInputElement>("#editPeriodSeconds")?.value ?? "";
+    const periodConfig = parsePeriodConfig(periodCountRaw, periodMinutesRaw, periodSecondsRaw);
     const dateTimeRaw = appRoot.querySelector<HTMLInputElement>("#editDateTime")?.value ?? "";
     const updatedMatch: MatchMetadata = {
       ...selected,

@@ -77,6 +77,9 @@ struct TimeTabView: View {
 struct NewMatchFormatPickerView: View {
     @EnvironmentObject private var model: WatchMatchViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var customPeriodCount = "1"
+    @State private var customMinutes = "12"
+    @State private var customSeconds = "34"
 
     var body: some View {
         ScrollView {
@@ -95,6 +98,28 @@ struct NewMatchFormatPickerView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(format == WatchPresentation.defaultNewMatchFormat ? .green : nil)
                 }
+
+                Divider()
+
+                Text("Custom")
+                    .font(.headline)
+
+                TextField("Periods", text: $customPeriodCount)
+                TextField("Minutes", text: $customMinutes)
+                TextField("Seconds", text: $customSeconds)
+
+                Button(action: {
+                    model.createQuickMatch(format: WatchMatchFormat.custom(
+                        periodCountRaw: customPeriodCount,
+                        minutesRaw: customMinutes,
+                        secondsRaw: customSeconds
+                    ))
+                    dismiss()
+                }) {
+                    Text("Create Custom")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
             }
         }
         .padding(8)

@@ -32,10 +32,22 @@ struct AdminTabView: View {
                         disabled: false,
                         action: model.pause
                     )
+                } else if model.isEnded {
+                    NavigationLink {
+                        NewMatchFormatPickerView()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .glassEffect()
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Text("New Match")
+                        .font(.caption2)
                 } else {
                     labeledIconButton(
-                        icon: model.isEnded ? "plus" : "play.fill",
-                        label: model.isEnded ? "New Match" : "Start",
+                        icon: "play.fill",
+                        label: "Start",
                         tint: .green,
                         disabled: false,
                         action: startPeriod
@@ -87,11 +99,6 @@ struct AdminTabView: View {
     }
 
     private func startPeriod() {
-        if model.isEnded {
-            model.createQuickMatch()
-            return
-        }
-
         if model.currentPeriod == 1 && model.currentPeriodPlayedSeconds == 0 {
             model.start()
         } else {

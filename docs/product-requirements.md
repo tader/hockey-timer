@@ -38,7 +38,12 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
   - 2 x 20 minutes (indoor)
   - 2 x 35 minutes
   - 4 x 15 minutes
+  - 1 x 12 minutes 34 seconds
   - Other user-defined period counts/durations
+- Every new-match surface on web, iPhone/iPad, and Apple Watch must provide a
+  custom format option before the match starts.
+- Custom formats must accept odd period counts and second-level durations, not
+  only whole or half minutes.
 - Allow changing play-time configuration after match start.
 - Timer display should show remaining time (countdown) per period.
 - When period duration is exceeded, timer should show overtime as elapsed overrun.
@@ -106,9 +111,11 @@ Create a connected ecosystem of Field Hockey Timer apps that work reliably in re
 ## Match List & Metadata UX
 - Users can create custom matches.
 - Users can edit match metadata after creation/import.
-- In web custom create and edit metadata flows, users can set match format:
+- In web, iPhone/iPad, and Apple Watch custom create flows, users can set match
+  format:
   - period count
-  - duration per period (minutes; applied uniformly across all periods)
+  - duration per period in minutes and seconds (applied uniformly across all
+    periods)
 - In web match view, show home/away team names below their scores when concrete team names are known (not placeholder labels).
 - These score-side team names should use slightly larger, bolder text than standard muted metadata labels.
 - In web match view, home and away score-adjustment buttons should use the same color treatment.

@@ -177,6 +177,17 @@ class MatchSyncViewModel: ObservableObject {
     func endPeriod() { push(eventType: "period.ended", payload: .empty) }
     func endMatch() { push(eventType: "match.ended", payload: .empty) }
 
+    func applyInitialFormat(periodCount: Int, periodDurationSeconds: [Int]) {
+        guard !periodDurationSeconds.isEmpty else { return }
+        self.periodCount = min(12, max(1, periodCount))
+        self.periodDurationSecondsByPeriod = periodDurationSeconds
+        let periodIndex = max(0, currentPeriod - 1)
+        self.periodDurationSeconds = periodDurationSeconds.indices.contains(periodIndex)
+            ? periodDurationSeconds[periodIndex]
+            : periodDurationSeconds[0]
+        saveLocalProjection()
+    }
+
     func incrementHome() {
         push(eventType: "score.changed", payload: .score(team: "home", delta: 1, reason: "goal"))
     }

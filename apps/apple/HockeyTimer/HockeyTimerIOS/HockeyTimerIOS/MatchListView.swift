@@ -10,6 +10,8 @@ struct MatchListItem: Identifiable, Codable, Hashable {
     let clubName: String?
     let teamName: String?
     let knhbMatchId: String?
+    let periodCount: Int?
+    let periodDurationSeconds: [Int]?
 
     var title: String {
         "\(homeTeam) – \(awayTeam)"
@@ -41,7 +43,9 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         awayTeam: String,
         clubName: String? = nil,
         teamName: String? = nil,
-        knhbMatchId: String? = nil
+        knhbMatchId: String? = nil,
+        periodCount: Int? = nil,
+        periodDurationSeconds: [Int]? = nil
     ) {
         self.id = id
         self.source = source
@@ -52,6 +56,8 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         self.clubName = clubName
         self.teamName = teamName
         self.knhbMatchId = knhbMatchId
+        self.periodCount = periodCount
+        self.periodDurationSeconds = periodDurationSeconds
     }
 
     init(from decoder: Decoder) throws {
@@ -63,6 +69,8 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         clubName = try? container.decode(String.self, forKey: .clubName)
         teamName = try? container.decode(String.self, forKey: .teamName)
         knhbMatchId = try? container.decode(String.self, forKey: .knhbMatchId)
+        periodCount = try? container.decode(Int.self, forKey: .periodCount)
+        periodDurationSeconds = try? container.decode([Int].self, forKey: .periodDurationSeconds)
 
         if let home = try? container.decode(String.self, forKey: .homeTeam),
            let away = try? container.decode(String.self, forKey: .awayTeam) {
@@ -93,6 +101,8 @@ struct MatchListItem: Identifiable, Codable, Hashable {
         case clubName
         case teamName
         case knhbMatchId
+        case periodCount
+        case periodDurationSeconds
     }
 
     private enum LegacyCodingKeys: String, CodingKey {
@@ -158,7 +168,7 @@ struct MatchListView: View {
                     NavigationLink {
                         MatchDetailView(
                             match: match,
-                            model: persistenceEnabled ? nil : IOSMatchViewModel.preview(),
+                            model: persistenceEnabled ? IOSMatchViewModel(matchId: match.id, initialFormat: match.customFormat) : IOSMatchViewModel.preview(),
                             persistsMetadata: persistenceEnabled
                         ) { updated in
                             if persistenceEnabled {
@@ -205,7 +215,13 @@ struct MatchListView: View {
                                 homeTeam: "Home",
                                 awayTeam: "Away"
                             )
-                            : IOSPreviewFixtures.matches[0]
+                            : IOSPreviewFixtures.matches[0],
+                        showsFormatControls: true,
+                        onFormatSave: { created, format in
+                            if persistenceEnabled {
+                                publishMatchFormat(created.id, format: format)
+                            }
+                        }
                     ) { created in
                         if persistenceEnabled {
                             MatchStore.shared.upsert(created)
@@ -300,6 +316,20 @@ struct MatchListView: View {
         }
     }
 
+    private func publishMatchFormat(_ matchId: String, format: CustomMatchFormat) {
+        guard persistenceEnabled else { return }
+        Task {
+            do {
+                try await RemoteMatchCatalogClient().publishFormat(matchId: matchId, format: format)
+                await loadRemoteMatches()
+            } catch {
+                await MainActor.run {
+                    syncMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
     private func upsertInMemory(_ match: MatchListItem) {
         if let index = matches.firstIndex(where: { $0.id == match.id }) {
             matches[index] = match
@@ -378,10 +408,39 @@ final class MatchStore {
     }
 }
 
+struct CustomMatchFormat {
+    let periodCount: Int
+    let periodDurationSeconds: [Int]
+
+    init(periodCount: Int, periodDurationSeconds: [Int]) {
+        self.periodCount = min(12, max(1, periodCount))
+        let fallback = max(1, periodDurationSeconds.first ?? 17 * 60 + 30)
+        let normalized = periodDurationSeconds.isEmpty
+            ? Array(repeating: fallback, count: self.periodCount)
+            : periodDurationSeconds.map { max(1, $0) }
+        self.periodDurationSeconds = normalized.count == self.periodCount
+            ? normalized
+            : Array(repeating: normalized.first ?? fallback, count: self.periodCount)
+    }
+
+    init(periodCountRaw: String, minutesRaw: String, secondsRaw: String) {
+        let parsedCount = Int(periodCountRaw) ?? 4
+        let parsedMinutes = Int(minutesRaw) ?? 17
+        let parsedSeconds = Int(secondsRaw) ?? 30
+        periodCount = min(12, max(1, parsedCount))
+        let minutes = min(180, max(0, parsedMinutes))
+        let seconds = min(59, max(0, parsedSeconds))
+        let duration = max(1, minutes * 60 + seconds)
+        periodDurationSeconds = Array(repeating: duration, count: periodCount)
+    }
+}
+
 struct MatchMetadataEditorView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
     let match: MatchListItem
+    var showsFormatControls = false
+    var onFormatSave: ((MatchListItem, CustomMatchFormat) -> Void)?
     let onSave: (MatchListItem) -> Void
 
     @State private var homeTeam = ""
@@ -390,6 +449,9 @@ struct MatchMetadataEditorView: View {
     @State private var teamName = ""
     @State private var hasDate = true
     @State private var matchDate = Date()
+    @State private var periodCount = "4"
+    @State private var periodMinutes = "17"
+    @State private var periodSeconds = "30"
 
     var body: some View {
         Form {
@@ -405,6 +467,16 @@ struct MatchMetadataEditorView: View {
                 TextField("Club", text: $clubName)
                 TextField("Team", text: $teamName)
             }
+            if showsFormatControls {
+                Section("Format") {
+                    TextField("Periods", text: $periodCount)
+                        .keyboardType(.numberPad)
+                    TextField("Minutes per period", text: $periodMinutes)
+                        .keyboardType(.numberPad)
+                    TextField("Seconds per period", text: $periodSeconds)
+                        .keyboardType(.numberPad)
+                }
+            }
         }
         .navigationTitle(title)
         .toolbar {
@@ -413,6 +485,13 @@ struct MatchMetadataEditorView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Save") {
+                    let format = showsFormatControls
+                        ? CustomMatchFormat(
+                            periodCountRaw: periodCount,
+                            minutesRaw: periodMinutes,
+                            secondsRaw: periodSeconds
+                        )
+                        : nil
                     let updated = MatchListItem(
                         id: match.id,
                         source: match.source,
@@ -422,9 +501,14 @@ struct MatchMetadataEditorView: View {
                         awayTeam: awayTeam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Away" : awayTeam.trimmingCharacters(in: .whitespacesAndNewlines),
                         clubName: clubName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : clubName.trimmingCharacters(in: .whitespacesAndNewlines),
                         teamName: teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : teamName.trimmingCharacters(in: .whitespacesAndNewlines),
-                        knhbMatchId: match.knhbMatchId
+                        knhbMatchId: match.knhbMatchId,
+                        periodCount: format?.periodCount ?? match.periodCount,
+                        periodDurationSeconds: format?.periodDurationSeconds ?? match.periodDurationSeconds
                     )
                     onSave(updated)
+                    if let format {
+                        onFormatSave?(updated, format)
+                    }
                     dismiss()
                 }
             }
@@ -442,6 +526,20 @@ struct MatchMetadataEditorView: View {
                 matchDate = Date()
             }
         }
+    }
+}
+
+private extension MatchListItem {
+    var customFormat: CustomMatchFormat? {
+        guard let periodCount,
+              let periodDurationSeconds,
+              !periodDurationSeconds.isEmpty else {
+            return nil
+        }
+        return CustomMatchFormat(
+            periodCount: periodCount,
+            periodDurationSeconds: periodDurationSeconds
+        )
     }
 }
 

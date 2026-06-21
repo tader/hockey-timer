@@ -13,6 +13,7 @@
   - end-period and end-match actions
   - match list sorting and filters (team/home/away/location/field/source)
   - custom match creation and quick-create flow
+  - second-level custom match formats for weird tournament formats
   - KNHB import for new match or assigning metadata to existing match
   - metadata editing, including `knhbMatchId` + `knhbSourceTeamId`
   - KNHB metadata refresh using `upcoming` + `official` match feeds
@@ -28,6 +29,7 @@
 - Apple shared sync now persists a durable offline event queue and retries flush on reconnect paths.
 - iOS app includes KNHB club/team/upcoming-match browse + import flow for match prefill.
 - iOS supports custom match creation and metadata editing.
+- iOS custom match creation supports second-level custom formats.
 - iOS match list now shows metadata, supports newest-first sorting, and filter inputs (home/away/club/team).
 - Imported KNHB matches now persist `knhbMatchId` in local metadata.
 - KNHB team picker now includes competition context in labels to disambiguate duplicate team names.
@@ -62,6 +64,8 @@
     match metadata so the web app can discover those matches
   - Apple match sync attaches stored bearer auth and mirrors auth state from
     iPhone to watch through Watch Connectivity
+- Apple Watch new-match flow supports custom period count plus minute/second
+  duration entry before creating a local match.
 - KNHB parsing hardened in web import flow:
   - dedicated parser module with guards against timestamp-like team fields
   - away-team timestamp regression covered by unit tests

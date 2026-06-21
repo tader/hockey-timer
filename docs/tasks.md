@@ -55,6 +55,9 @@
     wiring remains behind managed auth configuration.
 27. Web account controls use managed OIDC login: the web app opens the
     provider-hosted sign-in page and does not hard-code enabled connections.
+28. Custom match format input expanded across web, iPhone/iPad, and Apple Watch:
+    new-match flows must allow odd period counts and second-level durations such
+    as `1 x 12:34`.
 
 ## Phase 0: Planning (Current)
 1. Finalize product requirements document.

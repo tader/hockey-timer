@@ -5,6 +5,26 @@ struct WatchMatchFormat: Equatable, Identifiable {
     let label: String
     let periodCount: Int
     let periodDurationSeconds: [Int]
+
+    static func custom(periodCountRaw: String, minutesRaw: String, secondsRaw: String) -> WatchMatchFormat {
+        let parsedCount = Int(periodCountRaw) ?? 4
+        let parsedMinutes = Int(minutesRaw) ?? 17
+        let parsedSeconds = Int(secondsRaw) ?? 30
+        let periodCount = min(12, max(1, parsedCount))
+        let minutes = min(180, max(0, parsedMinutes))
+        let seconds = min(59, max(0, parsedSeconds))
+        let duration = max(1, minutes * 60 + seconds)
+        return WatchMatchFormat(
+            id: "custom-\(periodCount)x\(duration)",
+            label: "\(periodCount) x \(formatDuration(duration))",
+            periodCount: periodCount,
+            periodDurationSeconds: Array(repeating: duration, count: periodCount)
+        )
+    }
+
+    private static func formatDuration(_ seconds: Int) -> String {
+        "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+    }
 }
 
 struct WatchPresentation {

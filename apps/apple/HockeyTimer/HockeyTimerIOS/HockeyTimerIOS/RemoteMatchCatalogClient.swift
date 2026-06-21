@@ -68,6 +68,43 @@ struct RemoteMatchCatalogClient {
         }
     }
 
+    func publishFormat(matchId: String, format: CustomMatchFormat) async throws {
+        guard let authorization = AppleApiEndpointSync.shared.currentAuthorizationHeader() else {
+            return
+        }
+
+        let apiBase = AppleApiEndpointSync.shared.currentEndpoint(default: defaultApiBase)
+        guard let url = URL(string: "\(apiBase)/matches/\(matchId)/events:batchUpsert") else {
+            throw NSError(domain: "RemoteMatchCatalogClient", code: 5, userInfo: [NSLocalizedDescriptionKey: "Invalid format URL"])
+        }
+
+        let event = MatchEventDTO(
+            eventId: UUID().uuidString.lowercased(),
+            matchId: matchId,
+            eventType: "match.format.updated",
+            occurredAt: Self.isoString(Date()),
+            originDeviceId: deviceId(),
+            originPlatform: "ios",
+            sequence: nextSequence(),
+            payload: .format(
+                periodCount: format.periodCount,
+                periodDurationSeconds: format.periodDurationSeconds
+            ),
+            version: 1
+        )
+        let body = MatchBatchUpsertBody(events: [event])
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "content-type")
+        request.addValue(authorization, forHTTPHeaderField: "authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NSError(domain: "RemoteMatchCatalogClient", code: 6, userInfo: [NSLocalizedDescriptionKey: "Match format publish failed"])
+        }
+    }
+
     private func deviceId() -> String {
         if let existing = UserDefaults.standard.string(forKey: deviceIdKey), !existing.isEmpty {
             return existing

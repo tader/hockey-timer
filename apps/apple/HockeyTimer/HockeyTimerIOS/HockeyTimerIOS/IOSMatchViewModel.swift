@@ -3,6 +3,7 @@ import Foundation
 final class IOSMatchViewModel: MatchSyncViewModel {
     init(
         matchId: String = "demo-match",
+        initialFormat: CustomMatchFormat? = nil,
         isPreview: Bool = false,
         previewApiBase: String? = nil
     ) {
@@ -16,6 +17,12 @@ final class IOSMatchViewModel: MatchSyncViewModel {
             isPreview: isPreview,
             previewApiBase: previewApiBase
         )
+        if let initialFormat {
+            applyInitialFormat(
+                periodCount: initialFormat.periodCount,
+                periodDurationSeconds: initialFormat.periodDurationSeconds
+            )
+        }
     }
 
     static func preview(
