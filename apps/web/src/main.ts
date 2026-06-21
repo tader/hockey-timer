@@ -990,7 +990,7 @@ async function fetchKNHBOptions(url: string, preferredNameKeys: string[]): Promi
   const payload = (await response.json()) as unknown;
   const options: KNHBOption[] = [];
   for (const item of jsonObjects(payload)) {
-    const id = firstString(item, ["id", "clubId", "teamId", "code"]);
+    const id = firstString(item, ["id", "clubId", "teamId", "code", "federation_reference_id"]);
     const name = firstString(item, preferredNameKeys);
     if (!id || !name) continue;
     const abbreviation = firstString(item, ["abbreviation", "afkorting", "abbr", "kortenaam"]);
@@ -1029,7 +1029,8 @@ async function loadKNHBTeams(clubId: string): Promise<void> {
       if (!id || !name) continue;
       const type = firstString(item, ["type", "soort", "discipline", "veldZaal", "veld_zaal", "competitionType"]);
       const subtitle = type;
-      teams.push({ id, name, subtitle: subtitle || undefined });
+      const recentPouleId = firstString(item, ["recent_poule_id", "recentPouleId"]);
+      teams.push({ id: recentPouleId ? `${id}|${recentPouleId}` : id, name, subtitle: subtitle || undefined });
     }
     uiState.teams = teams;
     uiState.selectedTeamId = "";

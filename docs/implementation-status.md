@@ -94,6 +94,13 @@
   input, and did not restore the caret position.
 - Fix: club search now restores the caret after re-rendering the filtered club
   results.
+- Web KNHB import could not select clubs, teams, or matches after the upstream
+  HockeyWeerelt API move because clubs now identify with
+  `federation_reference_id`, teams are nested under `/clubs/{id}`, and matches
+  load from `/poules/{poule_id}/teams/{team_id}`.
+- Fix: the web parser now accepts federation reference IDs, team choices carry
+  their recent poule IDs, and the API proxy maps legacy web routes onto current
+  HockeyWeerelt routes.
 
 ## Next Priorities
 1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.

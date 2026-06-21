@@ -94,6 +94,37 @@ test("N1502 team snapshot exposes expected metadata fields", () => {
   assert.equal(firstString(payload, ["club_name", "clubName"]), "D.H.C. Hudito");
 });
 
+test("HockeyWeerelt club snapshot exposes federation reference ids", () => {
+  const payload = {
+    data: [{
+      federation_reference_id: "HH11JP6",
+      friendly_name: "HUDITO",
+      name: "D.H.C. Hudito",
+    }],
+  };
+  assert.equal(firstString(payload.data[0], ["id", "clubId", "teamId", "code", "federation_reference_id"]), "HH11JP6");
+  assert.equal(firstString(payload.data[0], ["friendly_name", "name"]), "HUDITO");
+});
+
+test("parseKNHBMatchItem reads current HockeyWeerelt poule match shape", () => {
+  const parsed = parseKNHBMatchItem({
+    id: 1836225,
+    date: "2025-09-07T12:45:00+02:00",
+    home: { name: "Roomburg D1" },
+    away: { name: "Derby D1" },
+    location: {
+      facility: { name: "Sportpark Roomburg" },
+      field: { name: "1 Rabo-veld" },
+    },
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.id, "1836225");
+  assert.equal(parsed.homeTeam, "Roomburg D1");
+  assert.equal(parsed.awayTeam, "Derby D1");
+  assert.equal(parsed.locationClubName, "Sportpark Roomburg");
+  assert.equal(parsed.fieldName, "1 Rabo-veld");
+});
+
 test("N1502 upcoming snapshot parses into valid matches", () => {
   const payload = readFixture("knhb-team-N1502-matches-upcoming.json");
   const items = Array.isArray(payload.data) ? payload.data : [];

@@ -102,6 +102,52 @@ async function startSignedKnhbServer() {
       return;
     }
 
+    if (req.method === "GET" && req.url === "/clubs/CLUB1") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        data: {
+          federation_reference_id: "CLUB1",
+          name: "Club One",
+          teams: [{
+            id: 252,
+            name: "Club One D1",
+            hockey_type: "VE",
+            category_group_name: "Senioren",
+            recent_poule_id: 173367,
+          }],
+        },
+      }));
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/poules/173367/teams/252") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        data: {
+          team: { id: 252, name: "Club One D1" },
+          poule: {
+            id: 173367,
+            matches: [{
+              id: 1836225,
+              date: "2026-03-15T14:45:00+02:00",
+              home: { name: "Club One D1" },
+              away: { id: 252, name: "Away D1" },
+              location: {
+                facility: { name: "Club One Park" },
+                field: { name: "Field 1" },
+              },
+            }, {
+              id: 1836226,
+              date: "2026-03-15T16:45:00+02:00",
+              home: { id: 999, name: "Other Home" },
+              away: { id: 998, name: "Other Away" },
+            }],
+          },
+        },
+      }));
+      return;
+    }
+
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "not found" }));
   });
@@ -185,6 +231,43 @@ test("local server signs KNHB proxy requests with anonymous device headers", asy
     assert.deepEqual(
       upstream.requests.map((request) => `${request.method} ${request.url}`),
       ["POST /device/register", "GET /clubs"],
+    );
+  } finally {
+    child.kill();
+    upstream.server.close();
+  }
+});
+
+test("local server maps KNHB team and match compatibility routes", async () => {
+  const upstream = await startSignedKnhbServer();
+  const { child, port } = await startServer({
+    KNHB_BASE_URL: `http://127.0.0.1:${upstream.port}`,
+  });
+  try {
+    const teamsResponse = await fetch(`http://127.0.0.1:${port}/knhb/clubs/CLUB1/teams`, {
+      headers: { authorization: "Bearer local-test-token" },
+    });
+    assert.equal(teamsResponse.status, 200);
+    const teamsBody = await teamsResponse.json();
+    assert.equal(teamsBody.data[0].name, "Club One D1");
+    assert.equal(teamsBody.data[0].recent_poule_id, 173367);
+
+    const matchesResponse = await fetch(`http://127.0.0.1:${port}/knhb/teams/252%7C173367/matches/upcoming`, {
+      headers: { authorization: "Bearer local-test-token" },
+    });
+    assert.equal(matchesResponse.status, 200);
+    const matchesBody = await matchesResponse.json();
+    assert.equal(matchesBody.data.length, 1);
+    assert.equal(matchesBody.data[0].home.name, "Club One D1");
+    assert.equal(matchesBody.data[0].location.field.name, "Field 1");
+
+    assert.deepEqual(
+      upstream.requests.map((request) => `${request.method} ${request.url}`),
+      [
+        "POST /device/register",
+        "GET /clubs/CLUB1",
+        "GET /poules/173367/teams/252",
+      ],
     );
   } finally {
     child.kill();

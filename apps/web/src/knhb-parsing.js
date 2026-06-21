@@ -207,7 +207,7 @@ export function parseKNHBMatchItem(item) {
     item.location && typeof item.location === "object" ? item.location : undefined
   );
   const locationDescription = rawLocation
-    ? firstString(rawLocation, ["description", "omschrijving"])
+    ? firstString(rawLocation, ["description", "omschrijving", "facility", "name"])
     : undefined;
   const locationClubName = locationDescription ?? firstString(item, [
     "locationClub", "club", "clubnaam", "location", "speellocatie", "accommodatie", "venueClub",

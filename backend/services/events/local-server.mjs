@@ -391,15 +391,7 @@ function sendJson(res, statusCode, payload) {
 async function proxyKnhbJson(res, path) {
   const target = `${KNHB_BASE}${path}`;
   try {
-    let response = await fetchWithRedirectGuard(target, {
-      headers: await knhbRequestHeaders(target),
-    });
-    if (response.status === 401) {
-      knhbDevice = undefined;
-      response = await fetchWithRedirectGuard(target, {
-        headers: await knhbRequestHeaders(target),
-      });
-    }
+    const response = await fetchKnhb(target);
 
     const text = await response.text();
     const contentType = response.headers.get("content-type") || "application/json";
@@ -417,6 +409,64 @@ async function proxyKnhbJson(res, path) {
       target,
     });
   }
+}
+
+async function proxyKnhbTeams(res, clubId) {
+  const target = `${KNHB_BASE}/clubs/${clubId}`;
+  try {
+    const response = await fetchKnhb(target);
+    const payload = await response.json();
+    sendJson(res, response.status, { data: payload?.data?.teams ?? [] });
+  } catch (error) {
+    sendJson(res, 502, {
+      error: "knhb proxy failed",
+      details: String(error),
+      target,
+    });
+  }
+}
+
+async function proxyKnhbTeamMatches(res, teamPouleId, kind) {
+  const [teamId, pouleId] = decodeURIComponent(teamPouleId).split("|");
+  if (!teamId || !pouleId) {
+    sendJson(res, 400, { error: "team id must include recent poule id" });
+    return;
+  }
+
+  const target = `${KNHB_BASE}/poules/${encodeURIComponent(pouleId)}/teams/${encodeURIComponent(teamId)}`;
+  try {
+    const response = await fetchKnhb(target);
+    const payload = await response.json();
+    const matches = Array.isArray(payload?.data?.poule?.matches) ? payload.data.poule.matches : [];
+    const teamMatches = matches.filter((match) => {
+      const homeId = match?.home?.id;
+      const awayId = match?.away?.id;
+      return String(homeId) === teamId || String(awayId) === teamId;
+    });
+    const filtered = kind === "official"
+      ? teamMatches.filter((match) => String(match?.status ?? "").toLowerCase() === "final")
+      : teamMatches.filter((match) => String(match?.status ?? "").toLowerCase() !== "final");
+    sendJson(res, response.status, { data: filtered.length > 0 ? filtered : teamMatches });
+  } catch (error) {
+    sendJson(res, 502, {
+      error: "knhb proxy failed",
+      details: String(error),
+      target,
+    });
+  }
+}
+
+async function fetchKnhb(target) {
+  let response = await fetchWithRedirectGuard(target, {
+    headers: await knhbRequestHeaders(target),
+  });
+  if (response.status === 401) {
+    knhbDevice = undefined;
+    response = await fetchWithRedirectGuard(target, {
+      headers: await knhbRequestHeaders(target),
+    });
+  }
+  return response;
 }
 
 async function knhbRequestHeaders(target) {
@@ -596,19 +646,17 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && knhbTeamsMatch) {
     const clubId = encodeURIComponent(decodeURIComponent(knhbTeamsMatch[1]));
-    await proxyKnhbJson(res, `/clubs/${clubId}/teams`);
+    await proxyKnhbTeams(res, clubId);
     return;
   }
 
   if (req.method === "GET" && knhbUpcomingMatch) {
-    const teamId = encodeURIComponent(decodeURIComponent(knhbUpcomingMatch[1]));
-    await proxyKnhbJson(res, `/teams/${teamId}/matches/upcoming`);
+    await proxyKnhbTeamMatches(res, knhbUpcomingMatch[1], "upcoming");
     return;
   }
 
   if (req.method === "GET" && knhbOfficialMatch) {
-    const teamId = encodeURIComponent(decodeURIComponent(knhbOfficialMatch[1]));
-    await proxyKnhbJson(res, `/teams/${teamId}/matches/official`);
+    await proxyKnhbTeamMatches(res, knhbOfficialMatch[1], "official");
     return;
   }
 
