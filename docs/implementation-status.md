@@ -89,6 +89,11 @@
   plus signed HAPI headers.
 - Fix: backend KNHB proxy now registers a server-side anonymous device, signs
   upstream requests with `X-HAPI-*` headers, and retries once on upstream 401.
+- Web KNHB club search input reversed typed text because the input handler
+  re-rendered the import section on every keystroke, focused the replacement
+  input, and did not restore the caret position.
+- Fix: club search now restores the caret after re-rendering the filtered club
+  results.
 
 ## Next Priorities
 1. Keep web app as feature reference and close parity gaps in iOS/watch immediately after web changes.

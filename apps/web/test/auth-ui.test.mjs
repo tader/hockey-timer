@@ -35,3 +35,12 @@ test("web app uses PKCE sign-in and bearer auth for API calls", () => {
   assert.equal(source.includes("identity_provider"), false);
   assert.equal(source.includes("connection"), false);
 });
+
+test("KNHB club search restores caret after filtering re-render", () => {
+  for (const marker of [
+    "clubQueryInput.selectionStart",
+    "replacement.setSelectionRange",
+  ]) {
+    assert.ok(source.includes(marker), `source missing ${marker}`);
+  }
+});

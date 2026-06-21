@@ -2151,10 +2151,15 @@ function wireHandlers(): void {
 
   const clubQueryInput = appRoot.querySelector<HTMLInputElement>("#clubQuery");
   clubQueryInput?.addEventListener("input", () => {
+    const caretPosition = clubQueryInput.selectionStart ?? clubQueryInput.value.length;
     uiState.clubQuery = clubQueryInput.value;
     render();
     const replacement = appRoot.querySelector<HTMLInputElement>("#clubQuery");
-    replacement?.focus();
+    if (replacement) {
+      replacement.focus();
+      const restoredPosition = Math.min(caretPosition, replacement.value.length);
+      replacement.setSelectionRange(restoredPosition, restoredPosition);
+    }
   });
 
   appRoot.querySelector<HTMLButtonElement>("#loadClubs")?.addEventListener("click", () => {
